@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weekly Stats Dashboard</title>
+<style>
+    body { font-family: sans-serif; background-color: #f4f4f4; color: #333; margin: 0; padding: 2em; }
+    .container { max-width: 900px; margin: 0 auto; background-color: white; padding: 2em; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); text-align: center; }
+    h1, h2 { color: #007bff; margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1.5em; }
+    th, td { border: 1px solid #ddd; padding: 0.75em; text-align: left; }
+    th { background-color: #f2f2f2; font-weight: bold; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+    .nav-links { margin-top: 1em; }
+    .nav-links a { margin: 0 0.5em; color: #007bff; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1 id="welcome-message">Welcome!</h1>
+    <p>This is your weekly progress dashboard.</p>
+
+    <h2>Last 7 Days Stats</h2>
+    <table id="stats-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Steps</th>
+                <th>Calories In (kcal)</th>
+                <th>Water In (ml)</th>
+                <th>Sleep (hrs)</th>
+                <th>Exercise (mins)</th>
+                <th>Protein (g)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Data will be populated by JavaScript -->
+        </tbody>
+    </table>
+
+    <div class="nav-links">
+        <a href="daily_input.html">Update Today's Stats</a> |
+        <a href="profile.html">User Profile</a> |
+        <a href="#" onclick="logout()">Log Out</a>
+    </div>
+</div>
+
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    const apiURL = window.APP_CONFIG.API_URL;
+    const welcomeMessage = document.getElementById('welcome-message');
+    const tableBody = document.querySelector('#stats-table tbody');
+
+    let usernameFallback = 'User';
+
+    // Fetch profile
+    try {
+        const profileResp = await fetch(`${apiURL}/profile`, { method: 'GET', credentials: 'include' });
+        const profileData = await profileResp.json();
+
+        const userResp = await fetch(`${apiURL}/user_info`, { method: 'GET', credentials: 'include' });
+        const userData = await userResp.json();
+        usernameFallback = userData.username || 'User';
+
+        const displayName = profileData.name && profileData.name.trim() !== '' ? profileData.name : usernameFallback;
+        if (welcomeMessage) welcomeMessage.textContent = `Welcome, ${displayName}!`;
+    } catch (err) {
+        console.error('Error fetching profile/user info:', err);
+        if (welcomeMessage) welcomeMessage.textContent = `Welcome, ${usernameFallback}!`;
+    }
+
+    // Fetch last 7 days stats
+    try {
+        const statsResp = await fetch(`${apiURL}/weekly_stats`, { method: 'GET', credentials: 'include' });
+        const statsData = await statsResp.json();
+
+        if (!tableBody) return;
+        tableBody.innerHTML = '';
+
+        // If no data, show empty row
+        if (!statsData || statsData.length === 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td colspan="7">No data available for the last 7 days.</td>`;
+            tableBody.appendChild(row);
+            return;
+        }
+
+        // Build a date lookup for last 7 days
+        const today = new Date();
+        const last7Days = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(today.getDate() - i);
+            last7Days.push(d.toISOString().slice(0,10));
+        }
+
+        last7Days.forEach(date => {
+            const stat = statsData.find(s => s.date === date);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${date}</td>
+                <td>${stat ? stat.steps : '-'}</td>
+                <td>${stat ? stat.calories_in : '-'}</td>
+                <td>${stat ? stat.water_in : '-'}</td>
+                <td>${stat ? stat.sleep : '-'}</td>
+                <td>${stat ? stat.exercise : '-'}</td>
+                <td>${stat ? stat.protein : '-'}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+    } catch (err) {
+        console.error('Error fetching weekly stats:', err);
+        if (tableBody) tableBody.innerHTML = '<tr><td colspan="7">Failed to load data.</td></tr>';
+    }
+});
+</script>
+</body>
+</html>

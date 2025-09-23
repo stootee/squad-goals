@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>User Profile</title>
+<style>
+body { font-family: sans-serif; background-color: #f4f4f4; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+.container { background-color: white; padding: 2em; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+h1 { color: #333; margin-top: 0; }
+.form-group { margin-bottom: 1rem; text-align: left; }
+label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+input, select { width: 100%; padding: 0.75rem; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+button { width: 100%; padding: 0.75rem; border: none; border-radius: 4px; background-color: #007bff; color: white; font-size: 1rem; cursor: pointer; transition: background-color 0.3s; }
+button:hover { background-color: #0056b3; }
+.goals-display { margin-top: 1.5rem; padding: 1em; border-radius: 4px; border: 1px solid #ddd; background-color: #f9f9f9; display: none; }
+.nav-links { margin-top: 1em; }
+.nav-links a { margin: 0 0.5em; color: #007bff; text-decoration: none; }
+.message-container { margin-top: 1rem; padding: 1em; border-radius: 4px; font-weight: bold; display: none; }
+.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1 id="welcome-message">User Profile</h1>
+    <div id="message-container" class="message-container"></div>
+    <form id="profile-form">
+        <div class="form-group">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name">
+        </div>
+        <div class="form-group">
+            <label for="gender">Gender:</label>
+            <select id="gender" name="gender">
+                <option value="">Select...</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="age">Age:</label>
+            <input type="number" id="age" name="age">
+        </div>
+        <div class="form-group">
+            <label for="height_cm">Height (cm):</label>
+            <input type="number" id="height_cm" name="height_cm">
+        </div>
+        <div class="form-group">
+            <label for="weight_kg">Weight (kg):</label>
+            <input type="number" id="weight_kg" name="weight_kg">
+        </div>
+        <div class="form-group">
+            <label for="goal_weight_kg">Goal Weight (kg):</label>
+            <input type="number" id="goal_weight_kg" name="goal_weight_kg">
+        </div>
+        <button type="submit">Save Profile</button>
+    </form>
+    <div id="goals-output" class="goals-display">
+        <h3>Your Goals</h3>
+        <p id="calorie-goal"></p>
+        <p id="protein-goal"></p>
+    </div>
+    <div class="nav-links">
+        <a href="weekly_stats.html">Weekly Stats</a> |
+        <a href="daily_input.html">Daily Input</a> |
+        <a href="#" onclick="logout()">Log Out</a>
+    </div>
+</div>
+
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    const apiURL = window.APP_CONFIG.API_URL;
+    const messageDiv = document.getElementById('message-container');
+    const goalsOutput = document.getElementById('goals-output');
+    const calorieGoal = document.getElementById('calorie-goal');
+    const proteinGoal = document.getElementById('protein-goal');
+
+    // Fetch existing profile data
+    try {
+        const response = await fetch(`${apiURL}/profile`, { credentials: 'include' });
+        if (response.status === 401) { window.location.href = "login.html"; return; }
+        if (!response.ok) throw new Error('Failed to fetch profile');
+        const data = await response.json();
+        if (data) {
+            document.getElementById('name').value = data.name || '';
+            document.getElementById('gender').value = data.gender || '';
+            document.getElementById('age').value = data.age || '';
+            document.getElementById('height_cm').value = data.height_cm || '';
+            document.getElementById('weight_kg').value = data.weight_kg || '';
+            document.getElementById('goal_weight_kg').value = data.goal_weight_kg || '';
+        }
+    } catch (error) {
+        console.error('Error fetching profile:', error);
+    }
+
+    // Handle form submission
+    const form = document.getElementById('profile-form');
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(form).entries());
+        for (const key in data) if (data[key] === '') delete data[key];
+
+        try {
+            const response = await fetch(`${apiURL}/profile`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            if (response.ok) {
+                messageDiv.textContent = result.message || 'Profile saved successfully!';
+                messageDiv.className = 'message-container success';
+                if (result.calorie_goal && result.protein_goal) {
+                    calorieGoal.textContent = `Daily Calorie Goal: ${result.calorie_goal} kcal`;
+                    proteinGoal.textContent = `Daily Protein Goal: ${result.protein_goal} g`;
+                    goalsOutput.style.display = 'block';
+                } else {
+                    goalsOutput.style.display = 'none';
+                }
+            } else {
+                messageDiv.textContent = result.message || 'Failed to save profile.';
+                messageDiv.className = 'message-container error';
+                goalsOutput.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error saving profile:', error);
+            messageDiv.textContent = 'Unable to reach server. Please try again later.';
+            messageDiv.className = 'message-container error';
+            goalsOutput.style.display = 'none';
+        } finally {
+            messageDiv.style.display = 'block';
+            setTimeout(() => { messageDiv.style.display = 'none'; }, 5000);
+        }
+    });
+});
+</script>
+</body>
+</html>
