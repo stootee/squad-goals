@@ -44,6 +44,7 @@ button:hover { background-color: #0056b3; }
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('signup-form');
     const messageDiv = document.getElementById('message-container');
+    const loginPage = 'login.html';
     const apiURL = window.APP_CONFIG.API_URL;
 
     form?.addEventListener('submit', async (event) => {
@@ -62,6 +63,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 messageDiv.textContent = result.message || 'Account created successfully!';
                 messageDiv.className = 'message-container success';
+                setTimeout(() => {
+                    window.location.href = loginPage; 
+                }, 2000);
+                
+
             } else {
                 messageDiv.textContent = result.message || 'Sign up failed. Please try again.';
                 messageDiv.className = 'message-container error';
