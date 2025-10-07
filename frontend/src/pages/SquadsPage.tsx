@@ -1,12 +1,13 @@
-// src/pages/SquadsPage.tsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import "./../styles/global.css"; // import global styles
 
 interface Squad {
   id: string;
   name: string;
   admin: string;
   is_admin: boolean;
+  members: number;
 }
 
 interface Invite {
@@ -17,7 +18,7 @@ interface Invite {
 }
 
 const SquadsPage: React.FC = () => {
-  const apiURL = import.meta.env.VITE_API_URL;
+  const apiURL = window.APP_CONFIG.API_URL;
   const navigate = useNavigate();
 
   const [squads, setSquads] = useState<Squad[]>([]);
@@ -31,7 +32,7 @@ const SquadsPage: React.FC = () => {
       const data = await res.json();
       setInvites(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Error loading invites:", err);
+      console.error(err);
     }
   };
 
@@ -41,7 +42,7 @@ const SquadsPage: React.FC = () => {
       const data = await res.json();
       setSquads(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Error loading squads:", err);
+      console.error(err);
     }
   };
 
@@ -75,17 +76,12 @@ const SquadsPage: React.FC = () => {
         body: JSON.stringify({ response }),
       });
       const data = await res.json();
-
       if (res.ok) {
         setInvites((prev) => prev.filter((i) => i.id !== inviteId));
-
-        if (response === "accept") {
-            loadSquads(); 
-        }
-
+        if (response === "accept") loadSquads();
         alert(data.message);
       } else {
-        alert(data.message || "Failed to respond to invite");
+        alert(data.message || "Failed to respond");
       }
     } catch (err) {
       console.error(err);
@@ -96,82 +92,55 @@ const SquadsPage: React.FC = () => {
   useEffect(() => {
     loadInvites();
     loadSquads();
-    const interval = setInterval(loadInvites, 15000); // refresh invites every 15s
+    const interval = setInterval(loadInvites, 15000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <div style={{ fontFamily: "sans-serif", minHeight: "100vh", background: "#f4f4f4" }}>
+    <div>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "1em", background: "#007bff", color: "#fff" }}>
-        <h1>Squads</h1>
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          style={{ background: "transparent", border: "none", color: "#fff", fontSize: "1.5em", cursor: "pointer" }}
-        >
-          ☰
-        </button>
+      <div className="header-bar">
+        <h1 className="header-title">Squads</h1>
+        <button className="hamburger-btn" onClick={() => setMenuOpen(!menuOpen)}>☰</button>
       </div>
 
-      {/* Hidden Menu */}
+      {/* Dropdown Menu */}
       {menuOpen && (
-        <div style={{ background: "#fff", padding: "1em", borderBottom: "1px solid #ddd" }}>
-          <form onSubmit={createSquad} style={{ display: "flex", gap: "0.5em" }}>
-            <input
-              type="text"
-              placeholder="Squad name"
-              value={newSquadName}
-              onChange={(e) => setNewSquadName(e.target.value)}
-              required
-            />
-            <button type="submit" style={{ background: "#007bff", color: "#fff", padding: "0.5em 1em" }}>Create</button>
+        <div className="dropdown-menu">
+          <ul>
+            <li><button onClick={() => (window.location.href = "/profile")}>Profile</button></li>
+            <li><button onClick={() => (window.location.href = "/squads")}>Squads</button></li>
+            <li><button className="logout-btn" onClick={() => alert("Logout logic here")}>Logout</button></li>
+          </ul>
+
+          {/* Create Squad Form */}
+          <form onSubmit={createSquad} className="form-inline">
+            <input type="text" placeholder="Squad name" value={newSquadName} onChange={e => setNewSquadName(e.target.value)} required />
+            <button type="submit" className="submit-btn">Create</button>
           </form>
         </div>
       )}
 
-      {/* Grid of Squads & Invites */}
-      <div style={{ padding: "1em", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "1em" }}>
-        {/* Invites */}
-        {invites.map((invite) => (
-          <div key={invite.id} style={{ background: "#fff", border: "1px solid #ddd", padding: "1em", borderRadius: 6 }}>
+      {/* Content Grid */}
+      <div className="container grid">
+        {invites.map(invite => (
+          <div key={invite.id} className="glass-card">
             <h3>{invite.squad}</h3>
-            <p>Invited by {invite.invited_by}</p>
-
+            <span>Invited by {invite.invited_by}</span>
             {invite.status === "pending" && (
               <div style={{ display: "flex", gap: "0.5em", marginTop: "0.5em" }}>
-                <button
-                  onClick={() => respondInvite(invite.id, "accept")}
-                  style={{ background: "#28a745", color: "#fff", padding: "0.5em 1em" }}
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={() => respondInvite(invite.id, "decline")}
-                  style={{ background: "#dc3545", color: "#fff", padding: "0.5em 1em" }}
-                >
-                  Decline
-                </button>
+                <button onClick={() => respondInvite(invite.id, "accept")} className="submit-btn">Accept</button>
+                <button onClick={() => respondInvite(invite.id, "decline")} className="logout-btn">Decline</button>
               </div>
             )}
           </div>
         ))}
 
-        {/* Squads */}
-        {squads.map((squad) => (
-          <div
-            key={squad.id}
-            onClick={() => navigate(`/squads/${squad.id}/submit`)}
-            style={{
-              background: "#fff",
-              border: "1px solid #ddd",
-              padding: "1em",
-              borderRadius: 6,
-              cursor: "pointer",
-              transition: "0.2s",
-            }}
-          >
+        {squads.map(squad => (
+          <div key={squad.id} className="glass-card" onClick={() => navigate(`/squads/${squad.id}/submit`)}>
             <h3>{squad.name}</h3>
-            <p>Admin: **{squad.admin}**</p> 
+            <span className="text-break"><b>Admin:</b> {squad.admin}</span>
+            <span className="text-break"><b>Members:</b> {squad.members ?? 1}</span>
           </div>
         ))}
       </div>

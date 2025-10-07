@@ -1,0 +1,157 @@
+/* src/styles/global.css */
+
+/* Body & font */
+body {
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    margin: 0;
+    background: #f0f0f0;
+    color: #111;
+  }
+  
+  /* Header bar */
+  .header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1em;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  .header-title {
+    margin: 0;
+    font-size: 1.5em;
+  }
+  
+  /* Hamburger button */
+  .hamburger-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+  }
+  
+  /* Dropdown menu */
+  .dropdown-menu {
+    background: rgba(255,255,255,0.6);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    padding: 1em;
+  }
+  
+  .dropdown-menu ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .dropdown-menu li {
+    margin: 0.5em 0;
+  }
+  
+  .dropdown-menu button {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    font-size: 1em;
+    cursor: pointer;
+    padding: 0.5em 0;
+    transition: color 0.2s ease;
+  }
+  
+  .dropdown-menu button:hover {
+    color: #007bff;
+  }
+  
+  .dropdown-menu .logout-btn {
+    color: #dc3545;
+  }
+  
+  /* Container */
+  .container {
+    max-width: 900px;
+    margin: 2em auto;
+    padding: 0 1em;
+  }
+  
+  /* Grid layout for cards */
+  .grid {
+    display: grid;
+    gap: 1em;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+  
+  /* Glass card */
+  .glass-card {
+    background: rgba(255,255,255,0.6);
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.1);
+    padding: 1em;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .glass-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  }
+  
+  /* Form */
+  .form-inline {
+    display: flex;
+    gap: 0.5em;
+  }
+  
+  input[type="text"] {
+    flex: 1;
+    padding: 0.5em;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 1em;
+  }
+  
+  button.submit-btn {
+    background: #007bff;
+    color: #fff;
+    padding: 0.5em 1em;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+  }
+  
+  button.submit-btn:hover {
+    background: #005bb5;
+  }
+  
+  /* Responsive nav buttons (optional for squad tabs) */
+  .nav-btn {
+    padding: 0.5em 1em;
+    border-radius: 6px;
+    border: none;
+    flex: 1 1 auto;
+    margin: 0.2em 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .nav-btn.active {
+    background: #007bff;
+    color: #fff;
+  }
+  
+  .nav-btn.inactive {
+    background: #e0e0e0;
+    color: #111;
+  }
+  
+  /* Text breaks */
+  .text-break {
+    display: block;
+  }
+  

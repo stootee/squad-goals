@@ -18,12 +18,16 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = "Lax"
 
+# app.config['SESSION_COOKIE_SAMESITE'] = "None"
+# app.config['SESSION_COOKIE_SECURE'] = False  # or True if using HTTPS
+
+
 db.init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 
 # CORS for frontend
-CORS(app, supports_credentials=True, origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://192.168.0.72:5173"])
+CORS(app, supports_credentials=True, origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://0.0.0.0:5173", "http://squagol:5173"])
 
 # ------------------------
 # USER LOADER
@@ -370,7 +374,8 @@ def get_user_squads():
             "id": squad.id,
             "name": squad.name,
             "admin": squad.admin.username,
-            "is_admin": squad.admin_id == current_user.id
+            "is_admin": squad.admin_id == current_user.id,
+            "members": len(squad.members)
         })
     return jsonify(result), 200
 
@@ -628,4 +633,4 @@ def get_squad_entries_for_day(squad_id):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5050, debug=True)

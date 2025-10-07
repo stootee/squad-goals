@@ -1,5 +1,4 @@
-// config.js (development)
 window.APP_CONFIG = {
-    API_URL: "http://127.0.0.1:5000/api",
-    FRONTEND_URL: "http:///127.0.0.1:5173"
+    API_URL: "http://squagol:5050/api",
+    FRONTEND_URL: "http://squagol:5173"
 };

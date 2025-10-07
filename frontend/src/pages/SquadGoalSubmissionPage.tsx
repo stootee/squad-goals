@@ -22,7 +22,7 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
   const [message, setMessage] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string>("");
 
-  const apiURL = import.meta.env.VITE_API_URL;
+  const apiURL = window.APP_CONFIG.API_URL;
 
   const lastSevenDays = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
@@ -143,11 +143,9 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
   return (
     <div style={{ fontFamily: "sans-serif", background: "#f9f9f9", minHeight: "100vh", padding: "2em" }}>
       <div style={{ maxWidth: 900, margin: "0 auto", background: "#fff", padding: "2em", borderRadius: 8, boxShadow: "0 4px 8px rgba(0,0,0,0.1)" }}>
-        <h1 style={{ marginTop: 0, color: "#007bff" }}>Submit Daily Progress</h1>
+        <h1 style={{ marginTop: 0, color: "#007bff" }}>Daily Progress</h1>
 
         {message && <p style={{ color: message.includes("✅") ? "green" : "red", fontWeight: "bold" }}>{message}</p>}
-
-        <h2>Progress Grid (Last 7 Days)</h2>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#007bff", color: "#fff" }}>

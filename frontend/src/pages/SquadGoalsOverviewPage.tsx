@@ -40,7 +40,7 @@ const SquadDailyOverviewPage: React.FC<SquadDailyOverviewPageProps> = ({ squadId
     return sunday.toISOString().split("T")[0];
   });
 
-  const apiURL = import.meta.env.VITE_API_URL;
+  const apiURL = window.APP_CONFIG.API_URL;
 
   const fetchGoals = async () => {
     try {

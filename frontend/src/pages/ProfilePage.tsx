@@ -18,7 +18,7 @@ interface SaveResponse {
 }
 
 const ProfilePage: React.FC = () => {
-  const apiURL = import.meta.env.VITE_API_URL;
+  const apiURL = window.APP_CONFIG.API_URL;
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState<Profile>({});
