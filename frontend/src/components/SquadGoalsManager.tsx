@@ -15,6 +15,12 @@ interface SquadGoalsManagerProps {
   squadId: string;
 }
 
+interface GoalInputRowProps {
+  goal: Goal;
+  onChange: (field: keyof Goal, value: string | number | undefined) => void;
+  onRemove: () => void;
+}
+
 const inputStyle: React.CSSProperties = {
   flex: 1,
   padding: "0.75em",
@@ -23,10 +29,49 @@ const inputStyle: React.CSSProperties = {
   textAlign: "center",
   fontSize: "1em",
   outline: "none",
-  MozAppearance: "textfield",
-  WebkitAppearance: "none",
   appearance: "none",
 };
+
+const buttonStyle = (bgColor: string): React.CSSProperties => ({
+  padding: "0.5em 1em",
+  color: "#fff",
+  background: bgColor,
+  border: "none",
+  borderRadius: 6,
+  cursor: "pointer",
+});
+
+const GoalInputRow: React.FC<GoalInputRowProps> = ({ goal, onChange, onRemove }) => (
+  <div style={{ display: "flex", gap: "0.5em" }}>
+    <input
+      type="text"
+      value={goal.name}
+      placeholder="Goal name"
+      onChange={(e) => onChange("name", e.target.value)}
+      style={inputStyle}
+    />
+    <input
+      type="text"
+      value={goal.type}
+      placeholder="Type"
+      onChange={(e) => onChange("type", e.target.value)}
+      style={inputStyle}
+    />
+    <input
+      type="number"
+      value={goal.target ?? ""}
+      placeholder="Target"
+      onChange={(e) =>
+        onChange("target", e.target.value ? Number(e.target.value) : undefined)
+      }
+      style={inputStyle}
+      onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+    />
+    <button onClick={onRemove} style={buttonStyle("#dc3545")}>
+      Remove
+    </button>
+  </div>
+);
 
 const SquadGoalsManager: React.FC<SquadGoalsManagerProps> = ({ squadId }) => {
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -39,17 +84,15 @@ const SquadGoalsManager: React.FC<SquadGoalsManagerProps> = ({ squadId }) => {
   const loadGoals = async () => {
     try {
       const res = await fetch(`/api/squads/${squadId}/goals`, { credentials: "include" });
-      if (res.ok) {
-        const data: Goal[] = await res.json();
-        setGoals(data);
-      }
+      if (res.ok) setGoals(await res.json());
     } catch (err) {
       console.error("Error loading goals:", err);
     }
   };
 
   const saveGoal = async (goal: Goal) => {
-    if (!goal.name.trim() || !goal.type.trim()) return; 
+    if (!goal.name.trim() || !goal.type.trim()) return;
+
     try {
       const res = await fetch(`/api/squads/${squadId}/goals`, {
         method: "POST",
@@ -66,7 +109,7 @@ const SquadGoalsManager: React.FC<SquadGoalsManagerProps> = ({ squadId }) => {
     }
   };
 
-  const handleChange = (index: number, field: keyof Goal, value: string | number) => {
+  const handleGoalChange = (index: number, field: keyof Goal, value: string | number | undefined) => {
     const updated = [...goals];
     (updated[index] as any)[field] = value;
     setGoals(updated);
@@ -91,7 +134,7 @@ const SquadGoalsManager: React.FC<SquadGoalsManagerProps> = ({ squadId }) => {
         return;
       }
     }
-    setGoals(prev => prev.filter((_, i) => i !== index));
+    setGoals((prev) => prev.filter((_, i) => i !== index));
   };
 
   const addGoal = async () => {
@@ -107,7 +150,7 @@ const SquadGoalsManager: React.FC<SquadGoalsManagerProps> = ({ squadId }) => {
     };
 
     const savedGoal = await saveGoal(goal);
-    if (savedGoal) setGoals(prev => [...prev, savedGoal]);
+    if (savedGoal) setGoals((prev) => [...prev, savedGoal]);
     setNewGoal({ name: "", type: "", target: "" });
   };
 
@@ -117,42 +160,12 @@ const SquadGoalsManager: React.FC<SquadGoalsManagerProps> = ({ squadId }) => {
 
       <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: "0.5em" }}>
         {goals.map((goal, index) => (
-          <li key={goal.id || `temp-${index}`} style={{ display: "flex", gap: "0.5em" }}>
-            <input
-              type="text"
-              value={goal.name}
-              placeholder="Goal name"
-              onChange={e => handleChange(index, "name", e.target.value)}
-              style={inputStyle}
+          <li key={goal.id || `temp-${index}`}>
+            <GoalInputRow
+              goal={goal}
+              onChange={(field, value) => handleGoalChange(index, field, value)}
+              onRemove={() => removeGoal(goal, index)}
             />
-            <input
-              type="text"
-              value={goal.type}
-              placeholder="Type"
-              onChange={e => handleChange(index, "type", e.target.value)}
-              style={inputStyle}
-            />
-            <input
-              type="number"
-              value={goal.target ?? ""}
-              placeholder="Target"
-              onChange={e => handleChange(index, "target", e.target.value ? Number(e.target.value) : undefined)}
-              style={inputStyle}
-              onWheel={e => (e.currentTarget as HTMLInputElement).blur()}
-            />
-            <button
-              onClick={() => removeGoal(goal, index)}
-              style={{
-                padding: "0.5em 1em",
-                color: "#fff",
-                background: "#dc3545",
-                border: "none",
-                borderRadius: 6,
-                cursor: "pointer",
-              }}
-            >
-              Remove
-            </button>
           </li>
         ))}
       </ul>
@@ -162,35 +175,25 @@ const SquadGoalsManager: React.FC<SquadGoalsManagerProps> = ({ squadId }) => {
           type="text"
           placeholder="Goal name"
           value={newGoal.name}
-          onChange={e => setNewGoal({ ...newGoal, name: e.target.value })}
+          onChange={(e) => setNewGoal({ ...newGoal, name: e.target.value })}
           style={inputStyle}
         />
         <input
           type="text"
           placeholder="Type"
           value={newGoal.type}
-          onChange={e => setNewGoal({ ...newGoal, type: e.target.value })}
+          onChange={(e) => setNewGoal({ ...newGoal, type: e.target.value })}
           style={inputStyle}
         />
         <input
           type="number"
           placeholder="Target"
           value={newGoal.target}
-          onChange={e => setNewGoal({ ...newGoal, target: e.target.value })}
+          onChange={(e) => setNewGoal({ ...newGoal, target: e.target.value })}
           style={inputStyle}
-          onWheel={e => (e.currentTarget as HTMLInputElement).blur()}
+          onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
         />
-        <button
-          onClick={addGoal}
-          style={{
-            padding: "0.5em 1em",
-            color: "#fff",
-            background: "#28a745",
-            border: "none",
-            borderRadius: 6,
-            cursor: "pointer",
-          }}
-        >
+        <button onClick={addGoal} style={buttonStyle("#28a745")}>
           Add
         </button>
       </div>

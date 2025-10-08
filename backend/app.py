@@ -496,8 +496,6 @@ def get_goals(squad_id):
     if current_user not in squad.members:
         return jsonify({"message": "Not a squad member"}), 403
     goals = [g.to_dict() for g in squad.goals]
-    for x in goals:
-        print(x)
     return jsonify(goals)
 
 

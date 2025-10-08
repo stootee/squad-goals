@@ -1,0 +1,20 @@
+/* src/styles/theme.css */
+:root {
+  /* Base colors */
+  --color-bg: linear-gradient(135deg, #f0f0f0 0%, #d9d9d9 100%);
+  --color-header-bg: rgba(0, 0, 0, 0.85);
+  --color-text: #1a1a1a;
+  --color-accent: #007bff;
+
+  /* Glass effect */
+  --glass-bg: rgba(255, 255, 255, 0.25);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --glass-blur: blur(10px);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+
+  /* Buttons */
+  --btn-primary-bg: var(--color-accent);
+  --btn-primary-text: #fff;
+  --btn-danger-bg: #dc3545;
+  --btn-danger-text: #fff;
+}

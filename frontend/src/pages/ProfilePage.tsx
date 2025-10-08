@@ -1,6 +1,8 @@
 // src/pages/ProfilePage.tsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import AppLayout from "@components/AppLayout";
+import "./../styles/global.css";
 
 interface Profile {
   name?: string;
@@ -32,10 +34,7 @@ const ProfilePage: React.FC = () => {
     const fetchProfile = async () => {
       try {
         const res = await fetch(`${apiURL}/profile`, { credentials: "include" });
-        if (res.status === 401) {
-          navigate("/login");
-          return;
-        }
+        if (res.status === 401) return navigate("/login");
         if (!res.ok) throw new Error("Failed to fetch profile");
         const data: Profile = await res.json();
         setProfile(data);
@@ -46,9 +45,7 @@ const ProfilePage: React.FC = () => {
     fetchProfile();
   }, [apiURL, navigate]);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setProfile((prev) => ({ ...prev, [name]: value }));
   };
@@ -92,108 +89,66 @@ const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="container">
-      <h1>User Profile</h1>
+    <AppLayout title="Profile">
+    <div className="container" style={{ padding: "2em" }}>
+      <div className="glass-card">
 
-      {message && (
-        <div className={`message-container ${messageType}`} role="alert">
-          {message}
-        </div>
-      )}
+        {message && (
+          <div className={`message-container ${messageType}`} role="alert">
+            {message}
+          </div>
+        )}
 
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="name">Name:</label>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            value={profile.name || ""}
-            onChange={handleChange}
-            placeholder="Enter your name"
-          />
-        </div>
+        <form onSubmit={handleSubmit}>
+          {[
+            { label: "Name", name: "name", type: "text", placeholder: "Enter your name" },
+            { label: "Age", name: "age", type: "number", placeholder: "Enter your age" },
+            { label: "Height (cm)", name: "height_cm", type: "number", placeholder: "Enter your height" },
+            { label: "Weight (kg)", name: "weight_kg", type: "number", placeholder: "Enter your weight" },
+            { label: "Goal Weight (kg)", name: "goal_weight_kg", type: "number", placeholder: "Enter your goal weight" },
+          ].map((field) => (
+            <div key={field.name} className="form-group">
+              <label htmlFor={field.name}>{field.label}:</label>
+              <input
+                id={field.name}
+                name={field.name}
+                type={field.type}
+                value={profile[field.name as keyof Profile] || ""}
+                onChange={handleChange}
+                placeholder={field.placeholder}
+              />
+            </div>
+          ))}
 
-        <div className="form-group">
-          <label htmlFor="gender">Gender:</label>
-          <select
-            id="gender"
-            name="gender"
-            value={profile.gender || ""}
-            onChange={handleChange}
-            aria-label="Gender"
-          >
-            <option value="">Select...</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-          </select>
-        </div>
+          <div className="form-group">
+            <label htmlFor="gender">Gender:</label>
+            <select
+              id="gender"
+              name="gender"
+              value={profile.gender || ""}
+              onChange={handleChange}
+              aria-label="Gender"
+            >
+              <option value="">Select...</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+          </div>
 
-        <div className="form-group">
-          <label htmlFor="age">Age:</label>
-          <input
-            id="age"
-            name="age"
-            type="number"
-            value={profile.age || ""}
-            onChange={handleChange}
-            placeholder="Enter your age"
-          />
-        </div>
+          <button type="submit">Save Profile</button>
+        </form>
 
-        <div className="form-group">
-          <label htmlFor="height_cm">Height (cm):</label>
-          <input
-            id="height_cm"
-            name="height_cm"
-            type="number"
-            value={profile.height_cm || ""}
-            onChange={handleChange}
-            placeholder="Enter your height"
-          />
-        </div>
+        {(calorieGoal || proteinGoal) && (
+          <div className="goals-display" style={{ marginTop: "1em" }}>
+            <h3>Your Goals</h3>
+            {calorieGoal && <p>Daily Calorie Goal: {calorieGoal} kcal</p>}
+            {proteinGoal && <p>Daily Protein Goal: {proteinGoal} g</p>}
+          </div>
+        )}
 
-        <div className="form-group">
-          <label htmlFor="weight_kg">Weight (kg):</label>
-          <input
-            id="weight_kg"
-            name="weight_kg"
-            type="number"
-            value={profile.weight_kg || ""}
-            onChange={handleChange}
-            placeholder="Enter your weight"
-          />
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="goal_weight_kg">Goal Weight (kg):</label>
-          <input
-            id="goal_weight_kg"
-            name="goal_weight_kg"
-            type="number"
-            value={profile.goal_weight_kg || ""}
-            onChange={handleChange}
-            placeholder="Enter your goal weight"
-          />
-        </div>
-
-        <button type="submit">Save Profile</button>
-      </form>
-
-      {(calorieGoal || proteinGoal) && (
-        <div className="goals-display">
-          <h3>Your Goals</h3>
-          {calorieGoal && <p>Daily Calorie Goal: {calorieGoal} kcal</p>}
-          {proteinGoal && <p>Daily Protein Goal: {proteinGoal} g</p>}
-        </div>
-      )}
-
-      <div className="nav-links">
-        <a href="/weekly-stats">Weekly Stats</a> |{" "}
-        <a href="/daily-input">Daily Input</a> |{" "}
-        <button onClick={logout}>Log Out</button>
       </div>
     </div>
+    </AppLayout>
   );
 };
 

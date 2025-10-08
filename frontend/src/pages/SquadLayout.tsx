@@ -3,6 +3,9 @@ import SquadGoalSubmissionPage from "@pages/SquadGoalSubmissionPage";
 import SquadMembersPage from "@pages/SquadMembersPage";
 import SquadDailyOverviewPage from "@pages/SquadGoalsOverviewPage";
 import SquadGoalsManagerPage from "@pages/SquadGoalsManangerPage";
+import SquadGoalEntryPage from "@pages/SquadGoalEntryPage";
+import SquadGoalsSummaryPage from "@pages/SquadGoalsSummaryPage";
+import AppLayout from "@components/AppLayout";
 import "./../styles/global.css";
 
 interface SquadLayoutProps {
@@ -10,8 +13,7 @@ interface SquadLayoutProps {
 }
 
 const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
-  const [activeTab, setActiveTab] = useState<"submission" | "progress" | "members" | "goals">("submission");
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"today" | "summary" | "submission" | "progress" | "members" | "goals">("submission");
   const [squadName, setSquadName] = useState<string>("");
 
   const apiURL = window.APP_CONFIG.API_URL;
@@ -36,52 +38,33 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch(`${apiURL}/logout`, { method: "POST", credentials: "include" });
-      if (response.ok) window.location.href = "/login.html";
+      const res = await fetch(`${apiURL}/logout`, { method: "POST", credentials: "include" });
+      if (res.ok) window.location.href = "/login.html";
       else console.error("Logout failed");
     } catch (err) {
       console.error("Error during logout:", err);
     }
   };
 
-  return (
-    <div className="container">
-      {/* Header */}
-      <div className="glass-card header">
-        <h1>{squadName}</h1>
-        <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)}>☰</button>
-      </div>
+  const tabs = [
+    { key: "today", label: "Today" },
+    { key: "summary", label: "Summary" },
+    { key: "submission", label: "My Stats" },
+    { key: "progress", label: "Progress" },
+    { key: "members", label: "Members" },
+    { key: "goals", label: "Goals" },
+  ];
 
-      {/* Dropdown Menu */}
-      {menuOpen && (
-        <div className="glass-card dropdown">
-          <ul>
-            {[
-              { label: "Profile", action: () => (window.location.href = "/profile") },
-              { label: "Squads", action: () => (window.location.href = "/squads") },
-              { label: "Logout", action: handleLogout, color: "#a00" },
-            ].map((item, i) => (
-              <li key={i}>
-                <button className="dropdown-btn" style={{ color: item.color || undefined }} onClick={item.action}>
-                  {item.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+  return (
+    <AppLayout title={squadName}>
+    <div className="container">
 
       {/* Tabs */}
-      <div className="tabs">
-        {[
-          { key: "submission", label: "My Stats" },
-          { key: "progress", label: "Progress" },
-          { key: "members", label: "Members" },
-          { key: "goals", label: "Goals" },
-        ].map(({ key, label }) => (
+      <div className="tabs" style={{ display: "flex", gap: "0.5em", margin: "1em 0" }}>
+        {tabs.map(({ key, label }) => (
           <button
             key={key}
-            className={`tab-btn ${activeTab === key ? "active" : ""}`}
+            className={`nav-btn ${activeTab === key ? "active" : "inactive"}`}
             onClick={() => setActiveTab(key as any)}
           >
             {label}
@@ -90,13 +73,16 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
       </div>
 
       {/* Main Content */}
-      <div className="glass-card content">
+      <div className="glass-card">
+        {activeTab === "today" && <SquadGoalEntryPage squadId={squadId} />}
+        {activeTab === "summary" && <SquadGoalsSummaryPage squadId={squadId} />}
         {activeTab === "submission" && <SquadGoalSubmissionPage squadId={squadId} />}
         {activeTab === "members" && <SquadMembersPage squadId={squadId} />}
         {activeTab === "progress" && <SquadDailyOverviewPage squadId={squadId} />}
         {activeTab === "goals" && <SquadGoalsManagerPage squadId={squadId} />}
       </div>
     </div>
+    </AppLayout>
   );
 };
 

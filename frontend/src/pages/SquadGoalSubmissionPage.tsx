@@ -1,4 +1,6 @@
+// src/pages/SquadGoalSubmissionPage.tsx
 import React, { useEffect, useState, useMemo } from "react";
+import "./../styles/global.css";
 
 interface Goal {
   id: string;
@@ -15,6 +17,14 @@ interface SquadGoalSubmissionPageProps {
   squadId: string;
 }
 
+const inputStyle: React.CSSProperties = {
+  width: "60px", // restrict width
+  padding: "0.25em",
+  borderRadius: 4,
+  border: "1px solid #ccc",
+  textAlign: "center",
+};
+
 const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squadId }) => {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [userEntries, setUserEntries] = useState<UserEntries>({});
@@ -24,15 +34,17 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
 
   const apiURL = window.APP_CONFIG.API_URL;
 
-  const lastSevenDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - 6 + i);
-      return d.toISOString().split("T")[0];
-    });
-  }, []);
+  const lastSevenDays = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - 6 + i);
+        return d.toISOString().split("T")[0];
+      }),
+    []
+  );
 
-  // Fetch logged-in user
+  // Fetch current user
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
@@ -53,15 +65,14 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
     try {
       const res = await fetch(`${apiURL}/squads/${squadId}/goals`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load squad goals");
-      const data: Goal[] = await res.json();
-      setGoals(data);
+      setGoals(await res.json());
     } catch (err) {
       console.error(err);
       setMessage("Error loading squad goals");
     }
   };
 
-  // Fetch entries for current user
+  // Fetch user entries
   const fetchUserEntries = async () => {
     if (!currentUsername) return;
 
@@ -72,7 +83,7 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
         { credentials: "include" }
       );
       if (!res.ok) throw new Error("Failed to load entries");
-      const entriesArray = await res.json(); // [{goal_id, date, value}]
+      const entriesArray = await res.json();
       const entries: UserEntries = {};
       entriesArray.forEach((entry: any) => {
         if (!entries[entry.goal_id]) entries[entry.goal_id] = {};
@@ -85,7 +96,6 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
     }
   };
 
-  // Fetch goals + entries whenever squadId, currentUsername, or lastSevenDays change
   useEffect(() => {
     if (!currentUsername) return;
 
@@ -98,12 +108,10 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
     fetchData();
   }, [squadId, lastSevenDays, currentUsername]);
 
-  // Handle cell change
   const handleCellChange = async (goalId: string, date: string, value: string) => {
     const numValue = parseFloat(value);
     if (isNaN(numValue) || numValue < 0) return;
 
-    // Optimistically update state
     setUserEntries((prev) => ({
       ...prev,
       [goalId]: { ...prev[goalId], [date]: numValue },
@@ -133,23 +141,28 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
 
   if (goals.length === 0) {
     return (
-      <div style={{ padding: "2em", maxWidth: 600, margin: "0 auto" }}>
-        <h1 style={{ color: "#007bff" }}>Goal Submission</h1>
-        <p>The admin has not yet configured any goals for this squad. Progress tracking is not available.</p>
+      <div className="container">
+        <div className="glass-card">
+          <h1>Goal Submission</h1>
+          <p>The admin has not yet configured any goals for this squad. Progress tracking is not available.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ fontFamily: "sans-serif", background: "#f9f9f9", minHeight: "100vh", padding: "2em" }}>
-      <div style={{ maxWidth: 900, margin: "0 auto", background: "#fff", padding: "2em", borderRadius: 8, boxShadow: "0 4px 8px rgba(0,0,0,0.1)" }}>
-        <h1 style={{ marginTop: 0, color: "#007bff" }}>Daily Progress</h1>
-
-        {message && <p style={{ color: message.includes("✅") ? "green" : "red", fontWeight: "bold" }}>{message}</p>}
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <div className="container">
+      <div className="glass-card" style={{ overflowX: "auto" }}>
+        <h1>Daily Progress</h1>
+        {message && (
+          <p style={{ color: message.includes("✅") ? "green" : "red", fontWeight: "bold" }}>
+            {message}
+          </p>
+        )}
+        <table className="squad-table" style={{ borderCollapse: "collapse", minWidth: "600px" }}>
           <thead>
-            <tr style={{ background: "#007bff", color: "#fff" }}>
-              <th style={{ padding: "0.5em", border: "1px solid #ddd" }}>Goal</th>
+            <tr>
+              <th>Goal</th>
               {lastSevenDays.map((d) => (
                 <th key={d} style={{ padding: "0.5em", border: "1px solid #ddd", textAlign: "center" }}>
                   {new Date(d).toLocaleDateString(undefined, { month: "numeric", day: "numeric" })}
@@ -158,41 +171,32 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
             </tr>
           </thead>
           <tbody>
-            {goals.map((goal) => (
+            {goals.map((goal, rowIndex) => (
               <tr key={goal.id}>
                 <td style={{ padding: "0.5em", border: "1px solid #ddd", fontWeight: "bold" }}>
                   {goal.name} ({goal.type})
                 </td>
-                {lastSevenDays.map((d) => (
-                  <td key={d} style={{ padding: "0.5em", border: "1px solid #ddd", textAlign: "center" }}>
-                    <input
-                      type="text"
-                      min="0"
-                      step="any"
-                      value={userEntries[goal.id]?.[d] ?? ""}
-                      onChange={(e) => handleCellChange(goal.id, d, e.target.value)}
-                      style={{
-                        width: "50px",
-                        height: "50px",
-                        textAlign: "center",
-                        border: "1px solid #ccc",
-                        borderRadius: "6px",
-                        fontSize: "1em",
-                        outline: "none",
-                        appearance: "none",
-                        MozAppearance: "textfield",
-                        WebkitAppearance: "none",
-                        backgroundColor: "#f7f9fc",
-                        transition: "0.2s",
-                      }}
-                      onFocus={(e) => (e.currentTarget.style.borderColor = "#007bff")}
-                      onBlur={(e) => (e.currentTarget.style.borderColor = "#ccc")}
-                    />
-                  </td>
-                ))}
+                {lastSevenDays.map((d, colIndex) => {
+                  // Compute tabIndex so it goes column by column
+                  const tabIndex = colIndex * goals.length + rowIndex + 1;
+                  return (
+                    <td key={d} style={{ padding: "0.5em", border: "1px solid #ddd", textAlign: "center" }}>
+                      <input
+                        type="text"
+                        min="0"
+                        step="any"
+                        value={userEntries[goal.id]?.[d] ?? ""}
+                        onChange={(e) => handleCellChange(goal.id, d, e.target.value)}
+                        style={inputStyle}
+                        tabIndex={tabIndex}
+                      />
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
+
         </table>
       </div>
     </div>
