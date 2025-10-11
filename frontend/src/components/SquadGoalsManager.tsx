@@ -1,5 +1,5 @@
-// src/components/SquadGoalsManager.tsx
 import React, { useEffect, useState } from "react";
+import "../styles/global.css";
 
 interface Goal {
   id?: string;
@@ -23,13 +23,12 @@ interface GoalInputRowProps {
 
 const inputStyle: React.CSSProperties = {
   flex: 1,
-  padding: "0.75em",
+  padding: "0.5em",
   borderRadius: 6,
   border: "1px solid #ccc",
   textAlign: "center",
   fontSize: "1em",
   outline: "none",
-  appearance: "none",
 };
 
 const buttonStyle = (bgColor: string): React.CSSProperties => ({
@@ -42,7 +41,7 @@ const buttonStyle = (bgColor: string): React.CSSProperties => ({
 });
 
 const GoalInputRow: React.FC<GoalInputRowProps> = ({ goal, onChange, onRemove }) => (
-  <div style={{ display: "flex", gap: "0.5em" }}>
+  <div style={{ display: "flex", gap: "0.5em", flexWrap: "wrap" }}>
     <input
       type="text"
       value={goal.name}
@@ -113,7 +112,6 @@ const SquadGoalsManager: React.FC<SquadGoalsManagerProps> = ({ squadId }) => {
     const updated = [...goals];
     (updated[index] as any)[field] = value;
     setGoals(updated);
-
     if (updated[index].id) saveGoal(updated[index]);
   };
 
@@ -155,47 +153,49 @@ const SquadGoalsManager: React.FC<SquadGoalsManagerProps> = ({ squadId }) => {
   };
 
   return (
-    <div style={{ padding: "1em", border: "1px solid #ddd", borderRadius: 8, background: "#fefefe" }}>
-      <h2 style={{ marginBottom: "1em" }}>Squad Goals</h2>
+<div className="container">
+<div className="glass-card" style={{ maxWidth: "480px", margin: "0 auto" }}>
+        <h2>Squad Goals</h2>
 
-      <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: "0.5em" }}>
-        {goals.map((goal, index) => (
-          <li key={goal.id || `temp-${index}`}>
-            <GoalInputRow
-              goal={goal}
-              onChange={(field, value) => handleGoalChange(index, field, value)}
-              onRemove={() => removeGoal(goal, index)}
-            />
-          </li>
-        ))}
-      </ul>
+        <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: "0.5em" }}>
+          {goals.map((goal, index) => (
+            <li key={goal.id || `temp-${index}`}>
+              <GoalInputRow
+                goal={goal}
+                onChange={(field, value) => handleGoalChange(index, field, value)}
+                onRemove={() => removeGoal(goal, index)}
+              />
+            </li>
+          ))}
+        </ul>
 
-      <div style={{ display: "flex", gap: "0.5em", marginTop: "1em" }}>
-        <input
-          type="text"
-          placeholder="Goal name"
-          value={newGoal.name}
-          onChange={(e) => setNewGoal({ ...newGoal, name: e.target.value })}
-          style={inputStyle}
-        />
-        <input
-          type="text"
-          placeholder="Type"
-          value={newGoal.type}
-          onChange={(e) => setNewGoal({ ...newGoal, type: e.target.value })}
-          style={inputStyle}
-        />
-        <input
-          type="number"
-          placeholder="Target"
-          value={newGoal.target}
-          onChange={(e) => setNewGoal({ ...newGoal, target: e.target.value })}
-          style={inputStyle}
-          onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-        />
-        <button onClick={addGoal} style={buttonStyle("#28a745")}>
-          Add
-        </button>
+        <div style={{ display: "flex", gap: "0.5em", marginTop: "1em", flexWrap: "wrap" }}>
+          <input
+            type="text"
+            placeholder="Goal name"
+            value={newGoal.name}
+            onChange={(e) => setNewGoal({ ...newGoal, name: e.target.value })}
+            style={inputStyle}
+          />
+          <input
+            type="text"
+            placeholder="Type"
+            value={newGoal.type}
+            onChange={(e) => setNewGoal({ ...newGoal, type: e.target.value })}
+            style={inputStyle}
+          />
+          <input
+            type="number"
+            placeholder="Target"
+            value={newGoal.target}
+            onChange={(e) => setNewGoal({ ...newGoal, target: e.target.value })}
+            style={inputStyle}
+            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+          />
+          <button onClick={addGoal} style={buttonStyle("#28a745")}>
+            Add
+          </button>
+        </div>
       </div>
     </div>
   );

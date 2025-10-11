@@ -145,7 +145,7 @@ const SquadDetailPage: React.FC<SquadDetailPageProps> = ({ squadId }) => {
 
   return (
     <div className="container">
-      <div className="glass-card">
+      <div className="glass-card" style={{ maxWidth: "480px", margin: "0 auto" }}>
         <h2>Squad Members</h2>
         {squad.members.length === 0 ? (
           <p>No members yet.</p>

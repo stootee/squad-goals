@@ -30,7 +30,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({
 
   return (
     <div className="app-layout">
-      {/* Header */}
       <header className="app-header">
         <div className="header-left" onClick={() => navigate("/")}>
           <h1>{title}</h1>
@@ -51,7 +50,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         )}
       </header>
 
-      {/* Main Content */}
       <main className="app-main">
         <div className="content-wrapper">{children}</div>
       </main>
