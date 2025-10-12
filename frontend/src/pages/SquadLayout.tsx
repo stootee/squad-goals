@@ -2,84 +2,94 @@ import React, { useEffect, useState } from "react";
 import SquadGoalSubmissionPage from "@pages/SquadGoalSubmissionPage";
 import SquadMembersPage from "@pages/SquadMembersPage";
 import SquadDailyOverviewPage from "@pages/SquadGoalsOverviewPage";
-import SquadGoalsManagerPage from "@pages/SquadGoalsManangerPage";
+import SquadGoalsManagerPage from "@pages/SquadGoalsManagerPage";
 import SquadGoalEntryPage from "@pages/SquadGoalEntryPage";
 import AppLayout from "@components/AppLayout";
 import "./../styles/global.css";
+
+// Define a type for the possible tab keys
+type SquadTabKey = "today" | "submission" | "progress" | "members" | "goals";
 
 interface SquadLayoutProps {
   squadId: string;
 }
 
 const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
-  const [activeTab, setActiveTab] = useState<"today" | "submission" | "progress" | "members" | "goals">("submission");
-  const [squadName, setSquadName] = useState<string>("");
-
   const apiURL = window.APP_CONFIG.API_URL;
 
+  // Load the active tab from localStorage on initial render
+  const [activeTab, setActiveTab] = useState<SquadTabKey>(() => {
+    const savedTab = localStorage.getItem(`squad-${squadId}-activeTab`);
+    return (savedTab as SquadTabKey) || "today";
+  });
+
+  const [squadName, setSquadName] = useState<string>("");
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+
+  // Fetch squad information including name and admin status
   useEffect(() => {
     const fetchSquadName = async () => {
       try {
         const res = await fetch(`${apiURL}/squads/${squadId}`, { credentials: "include" });
-        if (res.ok) {
-          const data = await res.json();
-          setSquadName(data.name || "Squad");
+        const data = await res.json();
+        setSquadName(data.name || "Squad");
+
+        if (data.is_admin !== undefined) {
+          setIsAdmin(data.is_admin);
+        } else if (data.admin_id && data.admin_id === data.current_user_id) {
+          setIsAdmin(true);
         } else {
-          setSquadName("Squad");
+          setIsAdmin(false);
         }
       } catch (err) {
-        console.error("Error fetching squad name:", err);
+        console.error("Error fetching squad info:", err);
         setSquadName("Squad");
+        setIsAdmin(false);
       }
     };
     fetchSquadName();
-  }, [squadId]);
-
-  const handleLogout = async () => {
-    try {
-      const res = await fetch(`${apiURL}/logout`, { method: "POST", credentials: "include" });
-      if (res.ok) window.location.href = "/login.html";
-      else console.error("Logout failed");
-    } catch (err) {
-      console.error("Error during logout:", err);
-    }
-  };
+  }, [squadId, apiURL]);
 
   const tabs = [
-    { key: "today", label: "Today" },
-    { key: "submission", label: "My Stats" },
-    { key: "progress", label: "Progress" },
-    { key: "members", label: "Members" },
-    { key: "goals", label: "Goals" },
+    { key: "today" as SquadTabKey, label: "Today" },
+    { key: "submission" as SquadTabKey, label: "Recent History" },
+    { key: "progress" as SquadTabKey, label: "Squad Progress" },
+    { key: "members" as SquadTabKey, label: "Members" },
+    { key: "goals" as SquadTabKey, label: "Goals" },
   ];
+
+  // Update active tab and persist it in localStorage
+  const handleTabChange = (key: SquadTabKey) => {
+    setActiveTab(key);
+    localStorage.setItem(`squad-${squadId}-activeTab`, key);
+  };
 
   return (
     <AppLayout title={squadName}>
-    <div className="container">
-
-      {/* Tabs */}
-      <div className="tabs">
+      {/* Tabs container with proper ARIA role */}
+      <nav className="tabs" aria-label="Squad Views" role="tablist">
         {tabs.map(({ key, label }) => (
-          <div
+          <button
             key={key}
+            type="button"
             className={`nav-btn ${activeTab === key ? "active" : ""}`}
-            onClick={() => setActiveTab(key as any)}
+            onClick={() => handleTabChange(key)}
+            role="tab"
+            aria-selected={activeTab === key ? "true" : "false"}
           >
             {label}
-          </div>
+          </button>
         ))}
-      </div>
+      </nav>
 
-
-      {/* Main Content */}
-      <div className="glass-card">
+      {/* Main content area for the selected tab */}
+      <div className="glass-card" role="tabpanel">
         {activeTab === "today" && <SquadGoalEntryPage squadId={squadId} />}
         {activeTab === "submission" && <SquadGoalSubmissionPage squadId={squadId} />}
         {activeTab === "members" && <SquadMembersPage squadId={squadId} />}
         {activeTab === "progress" && <SquadDailyOverviewPage squadId={squadId} />}
-        {activeTab === "goals" && <SquadGoalsManagerPage squadId={squadId} />}
+        {activeTab === "goals" && <SquadGoalsManagerPage squadId={squadId} isAdmin={isAdmin} />}
       </div>
-    </div>
     </AppLayout>
   );
 };

@@ -1,8 +1,8 @@
-// src/pages/ProfilePage.tsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@components/AppLayout";
 import "./../styles/global.css";
+import "./../styles/ProfilePage.css";
 
 interface Profile {
   name?: string;
@@ -88,66 +88,69 @@ const ProfilePage: React.FC = () => {
     navigate("/login");
   };
 
+  const fields = [
+    { label: "Name", name: "name", type: "text", placeholder: "Enter your name" },
+    { label: "Age", name: "age", type: "number", placeholder: "Enter your age" },
+    { label: "Height (cm)", name: "height_cm", type: "number", placeholder: "Enter your height" },
+    { label: "Weight (kg)", name: "weight_kg", type: "number", placeholder: "Enter your weight" },
+    { label: "Goal Weight (kg)", name: "goal_weight_kg", type: "number", placeholder: "Enter your goal weight" },
+  ];
+
   return (
     <AppLayout title="Profile">
-    <div className="container" style={{ padding: "2em" }}>
-      <div className="glass-card">
+      <div className="container profile-page">
+        <div className="glass-card profile-card">
 
-        {message && (
-          <div className={`message-container ${messageType}`} role="alert">
-            {message}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          {[
-            { label: "Name", name: "name", type: "text", placeholder: "Enter your name" },
-            { label: "Age", name: "age", type: "number", placeholder: "Enter your age" },
-            { label: "Height (cm)", name: "height_cm", type: "number", placeholder: "Enter your height" },
-            { label: "Weight (kg)", name: "weight_kg", type: "number", placeholder: "Enter your weight" },
-            { label: "Goal Weight (kg)", name: "goal_weight_kg", type: "number", placeholder: "Enter your goal weight" },
-          ].map((field) => (
-            <div key={field.name} className="form-group">
-              <label htmlFor={field.name}>{field.label}:</label>
-              <input
-                id={field.name}
-                name={field.name}
-                type={field.type}
-                value={profile[field.name as keyof Profile] || ""}
-                onChange={handleChange}
-                placeholder={field.placeholder}
-              />
+          {message && (
+            <div className={`message-container ${messageType}`} role="alert">
+              {message}
             </div>
-          ))}
+          )}
 
-          <div className="form-group">
-            <label htmlFor="gender">Gender:</label>
-            <select
-              id="gender"
-              name="gender"
-              value={profile.gender || ""}
-              onChange={handleChange}
-              aria-label="Gender"
-            >
-              <option value="">Select...</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
-          </div>
+          <form onSubmit={handleSubmit} className="profile-form">
+            {fields.map((field) => (
+              <div key={field.name} className="form-group">
+                <label htmlFor={field.name}>{field.label}</label>
+                <input
+                  id={field.name}
+                  name={field.name}
+                  type={field.type}
+                  value={profile[field.name as keyof Profile] || ""}
+                  onChange={handleChange}
+                  placeholder={field.placeholder}
+                />
+              </div>
+            ))}
 
-          <button type="submit">Save Profile</button>
-        </form>
+            <div className="form-group">
+              <label htmlFor="gender">Gender</label>
+              <select
+                id="gender"
+                name="gender"
+                value={profile.gender || ""}
+                onChange={handleChange}
+                aria-label="Gender"
+              >
+                <option value="">Select...</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+            </div>
 
-        {(calorieGoal || proteinGoal) && (
-          <div className="goals-display" style={{ marginTop: "1em" }}>
-            <h3>Your Goals</h3>
-            {calorieGoal && <p>Daily Calorie Goal: {calorieGoal} kcal</p>}
-            {proteinGoal && <p>Daily Protein Goal: {proteinGoal} g</p>}
-          </div>
-        )}
+            <button type="submit" className="save-button">
+              Save Profile
+            </button>
+          </form>
 
+          {(calorieGoal || proteinGoal) && (
+            <div className="goals-display">
+              <h3>Your Goals</h3>
+              {calorieGoal && <p>Daily Calorie Goal: {calorieGoal} kcal</p>}
+              {proteinGoal && <p>Daily Protein Goal: {proteinGoal} g</p>}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
     </AppLayout>
   );
 };

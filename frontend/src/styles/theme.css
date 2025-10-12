@@ -1,20 +1,52 @@
-/* src/styles/theme.css */
+/* src/styles/theme.css (UNIFIED) */
 :root {
-  /* Base colors */
-  --color-bg: linear-gradient(135deg, #f0f0f0 0%, #d9d9d9 100%);
-  --color-header-bg: rgba(0, 0, 0, 0.85);
-  --color-text: #1a1a1a;
-  --color-accent: #007bff;
+  --color-text-dark: #111;
+  --color-primary: #007bff;
+  /* ==================================== */
+  /* GLOBAL COLORS (from global.css & theme.css) */
+  /* ==================================== */
+  --color-text: #111; /* Unified from --color-text-dark */
+  --color-text-light: #fff;
+  
+  --color-accent: #007bff; /* Primary/Accent color */
+  --color-success: #28a745; 
+  --color-danger: #ff0000;
+  
+  /* Backgrounds & Gradients */
+  --color-bg-light: #f8f8f8; /* Specific light gray */
+  --color-bg-dark: #d8d8d8; /* Specific dark gray */
+  --color-app-bg: linear-gradient(135deg, #e8e8e8, var(--color-bg-dark)); /* App layout background */
 
-  /* Glass effect */
-  --glass-bg: rgba(255, 255, 255, 0.25);
-  --glass-border: rgba(255, 255, 255, 0.3);
-  --glass-blur: blur(10px);
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  /* Header Blur/Fixed Background */
+  --background-rgb: 20, 20, 20;
+  --color-header-bg: rgba(var(--background-rgb), 0.9);
 
-  /* Buttons */
+  /* ==================================== */
+  /* GLASS & STRUCTURAL (from global.css & theme.css) */
+  /* ==================================== */
+  --border-radius-lg: 12px;
+  --border-radius-sm: 8px;
+  
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 2rem;
+  --max-content-width: 1300px;
+
+  /* Glass effect (used for .glass-card) */
+  --glass-bg: rgba(255, 255, 255, 0.85); /* Slightly less translucent than the old glass-bg */
+  --glass-border: rgba(255, 255, 255, 0.4);
+  --glass-blur: blur(8px);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* Unified shadow */
+
+  /* ==================================== */
+  /* BUTTONS (Unified) */
+  /* ==================================== */
   --btn-primary-bg: var(--color-accent);
-  --btn-primary-text: #fff;
-  --btn-danger-bg: #dc3545;
-  --btn-danger-text: #fff;
+  --btn-primary-text: var(--color-text-light);
+  
+  --btn-danger-bg: var(--color-danger);
+  --btn-danger-text: var(--color-text-light);
+
+  --btn-success-bg: var(--color-success);
+  --btn-success-text: var(--color-text-light);
 }

@@ -226,19 +226,74 @@ def invite_user(squad_id):
 
 @app.route('/api/invites', methods=['GET'])
 @login_required
-def get_invites():
+def api_invites():
+    # This is for admins to see who they've invited from a specific squad
+    squad_id = request.args.get('squad_id')
+    
+    if squad_id:
+        # 1. Verify the current user is an admin of the requested squad
+        # Assuming your Squad model has a relationship to the admin User object
+        squad = Squad.query.filter_by(id=squad_id).first()
+        if not squad or squad.admin.id != current_user.id:
+            return jsonify({"error": "Unauthorized access or squad not found."}), 403
+
+        # 2. Fetch all PENDING invites SENT FROM this squad
+        outbound_invites = SquadInvite.query.filter_by(squad_id=squad_id, status='pending').all()
+        
+        result = []
+        for i in outbound_invites:
+            # Need to look up the invited user's username
+            invited_user = User.query.get(i.invited_user_id) 
+            
+            result.append({
+                "id": i.id,
+                "squad_name": squad.name,
+                "squad_id": squad_id,
+                "invited_username": invited_user.username if invited_user else "Unknown User",
+                "status": i.status
+            })
+        
+        return jsonify(result)
+
+    # This is for users to see who has invited them
     invites = SquadInvite.query.filter_by(invited_user_id=current_user.id, status='pending').all()
     result = []
     for i in invites:
         if i.squad:
+            # Note: Checking for i.squad.admin ensures the squad still exists and has an admin
+            admin_username = i.squad.admin.username if i.squad.admin else "Unknown Admin"
+
             result.append({
                 "id": i.id,
                 "squad": i.squad.name,
                 "squad_id": i.squad_id,
-                "invited_by": i.squad.admin.username,
+                "invited_by": admin_username,
                 "status": i.status
             })
+            
     return jsonify(result)
+
+
+@app.route('/api/invites/<int:invite_id>', methods=['DELETE'])
+@login_required
+def rescind_invite(invite_id):
+    # Retrieve the pending invite by its ID
+    invite = SquadInvite.query.filter_by(id=invite_id, status='pending').first()
+    
+    if not invite:
+        return jsonify({"message": "Invite not found or already accepted/rejected."}), 404
+    
+    # Check if the current user is the admin of the squad that sent the invite
+    squad = Squad.query.get(invite.squad_id)
+    if not squad or squad.admin.id != current_user.id:
+        # 403 Forbidden is the correct status here
+        return jsonify({"error": "Unauthorized to rescind this invite."}), 403
+    
+    # Rescind the invite by deleting it from the database
+    db.session.delete(invite)
+    db.session.commit()
+    
+    return jsonify({"message": f"Invite to {invite.invited_user.username} successfully rescinded."}), 200
 
 
 @app.route('/api/invites/<invite_id>/respond', methods=['POST'])
@@ -293,6 +348,45 @@ def get_squad(squad_id):
         "members": members_list,
         "is_admin": squad.admin_id == current_user.id
     })
+
+
+@app.route('/api/squads/<squad_id>/profiles', methods=['GET'])
+@login_required
+def api_squad_profiles(squad_id):
+    squad = Squad.query.filter_by(id=squad_id).first()
+    if not squad:
+        return jsonify({"error": "Squad not found."}), 404
+
+    member_usernames = [member.username for member in squad.members]
+    if current_user.username not in member_usernames:
+        return jsonify({"error": "Access denied. Not a member of this squad."}), 403
+
+    # 2. Get the list of all usernames in the squad
+    # We already have member_usernames from the check above
+
+    # 3. Find the User records matching the usernames
+    # The 'User' model is required here to link username to user_id
+    users = User.query.filter(User.username.in_(member_usernames)).all()
+    user_ids = [u.id for u in users]
+
+    profiles = UserProfile.query.filter(UserProfile.user_id.in_(user_ids)).all()
+    
+    profile_data_list = []
+    
+    user_map = {u.id: u.username for u in users}
+
+    profile_map = {p.user_id: p.name for p in profiles}
+
+    for user_id, username in user_map.items():
+        configured_name = profile_map.get(user_id)
+
+        profile_entry = {
+            "username": username,
+            "configured_name": configured_name if configured_name else None
+        }
+        profile_data_list.append(profile_entry)
+            
+    return jsonify(profile_data_list), 200
 
 
 @app.route('/api/squads/<squad_id>/leave', methods=['POST'])

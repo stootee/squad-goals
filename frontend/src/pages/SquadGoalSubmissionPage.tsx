@@ -1,6 +1,7 @@
 // src/pages/SquadGoalSubmissionPage.tsx
 import React, { useEffect, useState, useMemo } from "react";
 import "./../styles/global.css";
+import "./../styles/SquadGoalSubmissionPage.css"; // Dedicated CSS for table layout
 
 interface Goal {
   id: string;
@@ -17,12 +18,12 @@ interface SquadGoalSubmissionPageProps {
   squadId: string;
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "60px", // restrict width
-  padding: "0.25em",
-  borderRadius: 4,
-  border: "1px solid #ccc",
-  textAlign: "center",
+// Helper to format date for display (e.g., 10/12)
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString(undefined, { 
+    month: "numeric", 
+    day: "numeric" 
+  });
 };
 
 const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squadId }) => {
@@ -32,20 +33,28 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
   const [message, setMessage] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string>("");
 
-  const apiURL = window.APP_CONFIG.API_URL;
+  // Use optional chaining for safer access
+  const apiURL = window.APP_CONFIG?.API_URL; 
+  
+  // Dependencies array for effects
+  const apiDependencies = [squadId, apiURL, currentUsername];
 
   const lastSevenDays = useMemo(
     () =>
       Array.from({ length: 7 }, (_, i) => {
         const d = new Date();
+        // Calculate the date for the last 7 days (index 0 is 6 days ago, index 6 is today)
         d.setDate(d.getDate() - 6 + i);
         return d.toISOString().split("T")[0];
       }),
     []
   );
 
+  // ==========================
   // Fetch current user
+  // ==========================
   useEffect(() => {
+    if (!apiURL) return;
     const fetchCurrentUser = async () => {
       try {
         const res = await fetch(`${apiURL}/user_info`, { credentials: "include" });
@@ -58,9 +67,12 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
       }
     };
     fetchCurrentUser();
-  }, []);
+  }, [apiURL]);
 
-  // Fetch goals
+
+  // ==========================
+  // Data Fetching Functions
+  // ==========================
   const fetchGoals = async () => {
     try {
       const res = await fetch(`${apiURL}/squads/${squadId}/goals`, { credentials: "include" });
@@ -72,7 +84,6 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
     }
   };
 
-  // Fetch user entries
   const fetchUserEntries = async () => {
     if (!currentUsername) return;
 
@@ -83,21 +94,28 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
         { credentials: "include" }
       );
       if (!res.ok) throw new Error("Failed to load entries");
+      
       const entriesArray = await res.json();
       const entries: UserEntries = {};
+      
+      // Transform the flat array response into the desired { goalId: { date: value } } structure
       entriesArray.forEach((entry: any) => {
         if (!entries[entry.goal_id]) entries[entry.goal_id] = {};
         entries[entry.goal_id][entry.date] = entry.value;
       });
+      
       setUserEntries(entries);
     } catch (err) {
       console.error(err);
       setMessage("Error loading your entries");
     }
   };
-
+  
+  // ==========================
+  // Main Data Effect
+  // ==========================
   useEffect(() => {
-    if (!currentUsername) return;
+    if (!currentUsername || !apiURL) return;
 
     const fetchData = async () => {
       setLoading(true);
@@ -106,23 +124,34 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
       setLoading(false);
     };
     fetchData();
-  }, [squadId, lastSevenDays, currentUsername]);
+  }, [squadId, currentUsername, apiURL]); // Removed lastSevenDays as dependency as it's a fixed memo
 
+  // ==========================
+  // Handler
+  // ==========================
   const handleCellChange = async (goalId: string, date: string, value: string) => {
-    const numValue = parseFloat(value);
-    if (isNaN(numValue) || numValue < 0) return;
-
+    // Basic validation and state update (optimistic UI)
+    const numericValue = parseFloat(value);
+    
+    // Update local state immediately with the raw string for input control
     setUserEntries((prev) => ({
       ...prev,
-      [goalId]: { ...prev[goalId], [date]: numValue },
+      [goalId]: { ...prev[goalId], [date]: value === "" ? "" : value },
     }));
+
+    // If value is empty, don't send API call, or send 0 if backend expects it.
+    // Assuming we only send if it's a valid, positive number for submission.
+    if (isNaN(numericValue) || numericValue < 0 || value === "") {
+        // You might clear the entry in the DB here if value is empty, depending on API.
+        return; 
+    }
 
     try {
       const res = await fetch(`${apiURL}/squads/${squadId}/goals/entry`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ date, values: { [goalId]: numValue } }),
+        body: JSON.stringify({ date, values: { [goalId]: numericValue } }),
       });
 
       if (!res.ok) {
@@ -137,66 +166,71 @@ const SquadGoalSubmissionPage: React.FC<SquadGoalSubmissionPageProps> = ({ squad
     }
   };
 
+  // ==========================
+  // Render
+  // ==========================
   if (loading) return <p>Loading your squad data...</p>;
 
   if (goals.length === 0) {
+    // Removed redundant `container` wrapper. `glass-card` stands alone.
     return (
-      <div className="container">
-        <div className="glass-card">
-          <h1>Goal Submission</h1>
-          <p>The admin has not yet configured any goals for this squad. Progress tracking is not available.</p>
-        </div>
+      <div className="glass-card">
+        <h1>Goal Submission</h1>
+        <p>The admin has not yet configured any goals for this squad. Progress tracking is not available.</p>
       </div>
     );
   }
 
   return (
-    <div className="container">
-      <div className="glass-card" style={{ overflowX: "auto" }}>
-        <h1>Daily Progress</h1>
-        {message && (
-          <p style={{ color: message.includes("✅") ? "green" : "red", fontWeight: "bold" }}>
-            {message}
-          </p>
-        )}
-        <table className="squad-table" style={{ borderCollapse: "collapse", minWidth: "600px" }}>
+    // Removed redundant `container` wrapper.
+    <div className="glass-card goal-submission-card">
+      <h1 className="card-title">My Progress History</h1>
+      
+      {/* Use standardized message classes */}
+      {message && (
+        <p className={message.includes("✅") ? "success-message" : "error-message"}>
+          {message}
+        </p>
+      )}
+      
+      {/* Wrapper for responsive table scrolling */}
+      <div className="responsive-table-wrapper"> 
+        <table className="squad-table" cellPadding={0} cellSpacing={0}>
           <thead>
             <tr>
-              <th>Goal</th>
+              <th className="goal-header">Goal</th>
               {lastSevenDays.map((d) => (
-                <th key={d} style={{ padding: "0.5em", border: "1px solid #ddd", textAlign: "center" }}>
-                  {new Date(d).toLocaleDateString(undefined, { month: "numeric", day: "numeric" })}
+                <th key={d} className="date-header">
+                  {formatDate(d)}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {goals.map((goal, rowIndex) => (
+            {goals.map((goal) => (
               <tr key={goal.id}>
-                <td style={{ padding: "0.5em", border: "1px solid #ddd", fontWeight: "bold" }}>
+                <td className="goal-name-cell">
                   {goal.name} ({goal.type})
                 </td>
-                {lastSevenDays.map((d, colIndex) => {
-                  // Compute tabIndex so it goes column by column
-                  const tabIndex = colIndex * goals.length + rowIndex + 1;
-                  return (
-                    <td key={d} style={{ padding: "0.5em", border: "1px solid #ddd", textAlign: "center" }}>
-                      <input
-                        type="text"
-                        min="0"
-                        step="any"
-                        value={userEntries[goal.id]?.[d] ?? ""}
-                        onChange={(e) => handleCellChange(goal.id, d, e.target.value)}
-                        style={inputStyle}
-                        tabIndex={tabIndex}
-                      />
-                    </td>
-                  );
-                })}
+                {lastSevenDays.map((d) => (
+                  <td key={d} className="entry-cell">
+                    <input
+                      type="number" // Changed to number to use the native mobile numeric keyboard
+                      min="0"
+                      step="any"
+                      placeholder="0"
+                      // Use the local state value. The state now stores strings for inputs.
+                      value={userEntries[goal.id]?.[d] ?? ""} 
+                      onChange={(e) => handleCellChange(goal.id, d, e.target.value)}
+                      className="table-input"
+                      inputMode="decimal" // Ensures correct mobile keyboard
+                      // Removed manual tabIndex calculation, relying on browser's natural flow
+                    />
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
-
         </table>
       </div>
     </div>

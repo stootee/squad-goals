@@ -1,0 +1,177 @@
+.squad-goals-manager {
+    max-width: 900px; 
+    margin: 0 auto;
+    align-self: center;
+    width: 100%; 
+    padding: var(--spacing-md);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: var(--border-radius-sm);
+    background: #fefefe;
+}
+
+.manager-title {
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.goals-responsive-area {
+    width: 100%;
+    overflow-x: auto; 
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm); 
+    padding-bottom: var(--spacing-sm); 
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.goals-responsive-area::-webkit-scrollbar {
+    display: none;
+}
+
+.goals-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex; 
+    flex-direction: column;
+    min-width: 0; 
+}
+
+.goal-list-item,
+.new-goal-form {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+    padding: var(--spacing-sm);
+    border-bottom: 1px dashed rgba(0, 0, 0, 0.05);
+    min-width: 0; 
+}
+
+.new-goal-form {
+    border-bottom: none; 
+    padding-bottom: var(--spacing-sm); 
+}
+
+.goal-input {
+    width: auto; 
+    padding: 0.5em 0.75em;
+    font-size: 0.95em;
+    flex-shrink: 1; 
+    min-width: 0; 
+}
+
+.goal-name-input {
+    flex-grow: 3; 
+    flex-basis: 40%;
+    max-width: none; 
+}
+
+.goal-type-input {
+    flex-basis: 25%;
+    max-width: 150px;
+    flex-grow: 1.5; 
+}
+
+.goal-target-input {
+    flex-basis: 20%;
+    max-width: 100px;
+    /* This will be overridden by global CSS, then reset back to center on desktop */
+    text-align: center; 
+    flex-grow: 0; 
+    flex-shrink: 0;
+}
+
+.remove-btn,
+.add-btn {
+    flex-shrink: 0;
+    width: 35px; 
+    height: 35px;
+    padding: 0; 
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9em;
+    max-width: none;
+}
+
+/* Goals Manager Rows - Mobile/Desktop Flex Layout */
+.goal-list-item,
+.new-goal-form {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+    padding: var(--spacing-sm);
+    border-bottom: 1px dashed rgba(0, 0, 0, 0.05);
+    min-width: 0; 
+}
+
+/* Goals Manager Inputs (Flexible Sizing) */
+.goal-name-input {
+    flex-grow: 3; 
+    flex-basis: 40%;
+    max-width: none; 
+}
+
+.goal-type-input {
+    flex-basis: 25%;
+    max-width: 150px;
+    flex-grow: 1.5; 
+}
+
+.goal-target-input {
+    flex-basis: 20%;
+    max-width: 100px;
+    flex-grow: 0; 
+    flex-shrink: 0;
+}
+
+/* Goals Manager Buttons (Fixed Small Size - Base for Mobile) */
+.remove-btn,
+.add-btn {
+    flex-shrink: 0;
+    width: 35px; 
+    height: 35px;
+    padding: 0; 
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9em;
+    max-width: none;
+    line-height: 1; 
+    position: relative;
+}
+
+/* FIX: Mobile/Tablet - Show 'X' and hide "Remove" text */
+@media (max-width: 768px) {
+    .goals-list, .new-goal-form {
+        min-width: 550px; 
+    }
+    
+    /* CRITICAL: Use text-indent to hide the original 'Remove' text */
+    .remove-btn {
+        text-indent: -9999px;
+        overflow: hidden;
+    }
+    
+    /* Display the compact 'X' on small screens */
+    .remove-btn::before {
+        content: "X";
+        font-weight: bold;
+        color: white; 
+        position: absolute; 
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-indent: 0;
+    }
+    
+    /* Input constraints on mobile */
+    .goal-name-input {
+        max-width: 180px; 
+    }
+
+    .goal-target-input {
+        max-width: 80px;
+    }
+}

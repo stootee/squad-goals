@@ -1,0 +1,203 @@
+/* ==================================================== */
+/* Global Styles (Retained Aesthetic) */
+/* ==================================================== */
+
+.goal-entry-page {
+    /* Set a reasonable maximum width for the *entire* card content */
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px; /* Assuming this is wrapped in a glass-card div */
+}
+
+.page-title {
+    font-size: 1.8em;
+    font-weight: 700;
+    color: var(--text-color);
+    margin-bottom: 5px;
+}
+
+/* Date Navigator Styling */
+.date-navigator {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 20px 0 30px;
+    padding: 5px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.date-display {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+/* List of Goals (Mobile Default) */
+.goal-list {
+    margin-top: 20px;
+}
+
+.goal-entry-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.goal-label {
+    /* Full width for the label on mobile */
+    flex-grow: 1; 
+    font-weight: 600;
+    font-size: 1em;
+    color: var(--text-color);
+    padding-right: 10px;
+}
+
+/* Input Styling */
+.input.goal-input {
+    width: 90px; /* Fixed width for value input on mobile */
+    padding: 8px 10px;
+    border: 1px solid var(--input-border-color);
+    border-radius: 6px;
+    text-align: right;
+    background-color: rgba(0, 0, 0, 0.2);
+    color: var(--highlight-color);
+    font-weight: bold;
+    transition: border-color 0.2s;
+}
+
+.input.goal-input:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+/* Action Buttons */
+.action-group {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.submit-btn {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    flex-grow: 1;
+    transition: background-color 0.2s, opacity 0.2s;
+}
+
+.primary-btn {
+    background-color: var(--primary-color);
+    color: var(--text-color); 
+}
+
+.primary-btn:hover {
+    background-color: var(--primary-color-dark);
+}
+
+.secondary-btn {
+    background-color: var(--background-dark-color);
+    color: var(--text-color-light);
+    border: 1px solid var(--border-color);
+}
+
+.secondary-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Message Display (Unchanged) */
+.success-message {
+    color: var(--success-color);
+    font-weight: 600;
+    margin-top: 20px;
+}
+
+.error-message {
+    color: var(--error-color);
+    font-weight: 600;
+    margin-top: 20px;
+}
+
+/* Goals Entry Page Specifics */
+.goal-entry-page {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px; 
+}
+
+.goal-entry-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Date Navigator Button Styling */
+.nav-btn {
+    padding: 8px 12px;
+    height: 35px;
+    min-width: 35px; 
+    border: none;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.2s, opacity 0.2s;
+    font-size: 1.2em; 
+    line-height: 1; 
+    display: flex; 
+    align-items: center;
+    justify-content: center;
+}
+
+/* ==================================================== */
+/* Desktop Restyle Fix */
+/* ==================================================== */
+@media (min-width: 768px) {
+    .goal-entry-page {
+        /* On desktop, allow content to fill the max-width, but we will constrain the goals */
+        max-width: 550px; /* Slightly wider main container */
+    }
+
+    .goal-entry-row {
+        /* Change to use columns or a more controlled layout */
+        display: grid;
+        /* Define two columns: 70% for the label, 30% for the input */
+        grid-template-columns: 70% 30%; 
+        align-items: center;
+        /* Center the entire row container relative to the 700px max-width */
+        margin: 0 auto; 
+    }
+
+    .goal-label {
+        /* Ensure the label text is left-aligned in its 70% column */
+        padding-right: 20px;
+        text-align: left;
+        /* The label gets the main content area */
+        flex-grow: unset; 
+    }
+
+    .input.goal-input {
+        /* Keep input constrained but allow it to fill its 30% column slightly better */
+        width: 100%; 
+        max-width: 120px; /* Allow input to grow a little on desktop */
+        /* Align the input itself to the right of its column */
+        justify-self: end; 
+    }
+
+    .action-group {
+        /* Ensure buttons are nicely spaced but don't stretch excessively across 700px */
+        max-width: 450px;
+        margin: 30px auto 0;
+    }
+}

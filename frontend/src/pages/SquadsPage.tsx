@@ -1,3 +1,4 @@
+// src/components/SquadsPage.tsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@components/AppLayout";
@@ -19,7 +20,8 @@ interface Invite {
 }
 
 const SquadsPage: React.FC = () => {
-  const apiURL = window.APP_CONFIG.API_URL;
+  // Use optional chaining for safer access to window.APP_CONFIG
+  const apiURL = window.APP_CONFIG?.API_URL || "/api";
   const navigate = useNavigate();
 
   const [squads, setSquads] = useState<Squad[]>([]);
@@ -62,7 +64,8 @@ const SquadsPage: React.FC = () => {
       });
 
       const data = await res.json();
-      alert(data.message);
+      if (!res.ok) console.error(data.message);
+      
       if (res.ok) {
         setNewSquadName("");
         loadSquads();
@@ -82,17 +85,19 @@ const SquadsPage: React.FC = () => {
         body: JSON.stringify({ response }),
       });
 
-      const data = await res.json();
+      // Using console.error for non-breaking error reports
+      if (!res.ok) {
+        const data = await res.json();
+        console.error(data.message || "Failed to respond");
+        return;
+      }
+
       if (res.ok) {
         setInvites((prev) => prev.filter((i) => i.id !== inviteId));
         if (response === "accept") loadSquads();
-        alert(data.message);
-      } else {
-        alert(data.message || "Failed to respond");
       }
     } catch (err) {
       console.error(err);
-      alert("Error responding to invite");
     }
   };
 
@@ -116,16 +121,16 @@ const SquadsPage: React.FC = () => {
         </button>
 
         {menuOpen && (
-          <form onSubmit={createSquad} className="form-inline">
+          <form onSubmit={createSquad} className="form-inline" style={{ display: 'flex', gap: '10px' }}>
             <input
               type="text"
               placeholder="Squad name"
               value={newSquadName}
               onChange={(e) => setNewSquadName(e.target.value)}
               required
-              style={{ width: "50%" }} // half the current width
+              style={{ flexGrow: 1, maxWidth: '300px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} 
             />
-            <button type="submit" className="submit-btn">
+            <button type="submit" className="submit-btn" style={{ padding: '8px 16px', borderRadius: '4px', border: 'none', cursor: 'pointer', backgroundColor: '#3f51b5', color: 'white' }}>
               Create
             </button>
           </form>
@@ -133,23 +138,31 @@ const SquadsPage: React.FC = () => {
       </div>
 
       {/* Content Grid */}
-      <div className="container grid">
+      <div className="container grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
         {/* Pending Invites */}
         {invites.map((invite) => (
-          <div key={invite.id} className="glass-card">
-            <h3>{invite.squad}</h3>
-            <span>Invited by {invite.invited_by}</span>
+          <div key={invite.id} className="glass-card" style={{ padding: '15px', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+            <h3 style={{ margin: '0 0 5px 0', fontSize: '1.2em' }}>{invite.squad}</h3>
+            <span style={{ fontSize: '0.9em', color: '#666' }}>Invited by {invite.invited_by}</span>
             {invite.status === "pending" && (
-              <div className="form-inline" style={{ marginTop: "0.5em" }}>
+              // FIX: Ensures equal size (flex: 1) and color-coding (red/green) for buttons
+              <div 
+                className="form-inline" 
+                style={{ 
+                  marginTop: "15px", 
+                  display: 'flex', 
+                  gap: '10px' // Space between buttons
+                }}
+              >
                 <button
-                  className="submit-btn"
                   onClick={() => respondInvite(invite.id, "accept")}
+                  className="success-btn"
                 >
                   Accept
                 </button>
                 <button
-                  className="logout-btn"
                   onClick={() => respondInvite(invite.id, "decline")}
+                  className="danger-btn"
                 >
                   Decline
                 </button>
@@ -164,12 +177,20 @@ const SquadsPage: React.FC = () => {
             key={squad.id}
             className="glass-card"
             onClick={() => navigate(`/squads/${squad.id}/submit`)}
+            style={{ 
+              padding: '15px', 
+              borderRadius: '8px', 
+              border: '1px solid #3f51b5', 
+              cursor: 'pointer',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+              transition: 'transform 0.2s'
+            }}
           >
-            <h3>{squad.name}</h3>
-            <span className="text-break">
+            <h3 style={{ margin: '0 0 5px 0', fontSize: '1.2em', color: '#3f51b5' }}>{squad.name}</h3>
+            <span className="text-break" style={{ display: 'block', margin: '5px 0' }}>
               <b>Admin:</b> {squad.admin}
             </span>
-            <span className="text-break">
+            <span className="text-break" style={{ display: 'block' }}>
               <b>Members:</b> {squad.members ?? 1}
             </span>
           </div>

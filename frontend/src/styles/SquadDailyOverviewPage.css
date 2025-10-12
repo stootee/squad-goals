@@ -1,0 +1,240 @@
+/* ========================================= */
+/* Global Styles for Mobile First Design */
+/* ========================================= */
+.squad-daily-overview {
+    /* Ensures the component doesn't get too wide on massive screens */
+    max-width: 900px; 
+    margin: 0 auto;
+}
+
+/* Date Filters: Stacked on Mobile, Inline on Desktop (with media query) */
+.date-filters {
+    display: flex;
+    flex-direction: column; /* Default stack for mobile */
+    gap: 15px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.date-filters label {
+    display: flex;
+    flex-direction: column;
+    font-weight: bold;
+}
+
+.date-filters input {
+    padding: 8px;
+    border: 1px solid var(--input-border-color);
+    border-radius: 6px;
+    margin-top: 5px;
+}
+
+/* ========================================= */
+/* Mobile Card View (Default View) */
+/* ========================================= */
+
+.desktop-table-view {
+    /* Hide table by default (mobile) */
+    display: none; 
+}
+
+.user-card {
+    /* Card specific styling */
+    margin-bottom: 15px;
+    padding: 0; /* Remove internal padding, use padding on header/body */
+    cursor: pointer;
+    overflow: hidden; /* Contains children */
+    transition: all 0.2s ease-in-out;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border-bottom: 1px solid transparent;
+    transition: background-color 0.15s;
+}
+
+.user-card:hover .card-header {
+    background-color: rgba(255, 255, 255, 0.05); /* subtle hover effect */
+}
+
+.user-card.is-expanded .card-header {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.summary-stats {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* --- UPDATED CLASSES FOR GOAL COUNT DISPLAY --- */
+.count-label { 
+    /* Use the default style from .summary-stats unless specific color needed */
+    color: var(--text-color-light); 
+    font-size: 0.9em;
+}
+
+.count-value { /* Renamed from .total-value */
+    font-size: 1.2em;
+    color: var(--highlight-color); /* Use a bold color for the count */
+    font-weight: bold;
+}
+/* ------------------------------------------- */
+
+.toggle-icon {
+    font-size: 0.8em;
+    color: var(--text-color-light);
+}
+
+/* Card Details (Expanded Content) */
+.card-details {
+    padding: 15px;
+}
+
+.detail-heading {
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--text-color-light);
+    margin: 10px 0 10px 0;
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 5px;
+}
+
+/* Goal Summary List */
+.goal-summary-list, .day-goal-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.goal-summary-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px dotted rgba(255, 255, 255, 0.1);
+}
+
+.goal-total {
+    color: var(--success-color);
+}
+
+/* Daily Entries */
+.day-entries {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.1); /* Subtle dark background for daily block */
+    border-radius: 8px;
+}
+
+.entry-date {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.day-goal-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.day-goal-list li {
+    flex: 1 1 40%; /* Each item takes roughly half the width */
+    display: flex;
+    justify-content: space-between;
+}
+
+.goal-value-small {
+    font-weight: bold;
+}
+.goal-value-small.no-value {
+    color: var(--text-color-light);
+}
+
+/* ========================================= */
+/* Desktop Table View (Media Query) */
+/* ========================================= */
+@media (min-width: 768px) {
+    /* Hide cards, show table */
+    .mobile-card-view {
+        display: none;
+    }
+    .desktop-table-view {
+        display: block;
+    }
+
+    /* Date filters become horizontal */
+    .date-filters {
+        flex-direction: row;
+        justify-content: flex-start;
+    }
+    .date-filters label {
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+    }
+
+    /* Table styling for better desktop density */
+    .squad-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95em;
+    }
+
+    .squad-table th, .squad-table td {
+        padding: 10px 8px;
+        text-align: center;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap; /* Prevent headers from wrapping too much */
+    }
+
+    .squad-table th {
+        font-weight: bold;
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+    
+    .squad-table td {
+        vertical-align: middle;
+    }
+
+    .user-name-cell {
+        text-align: left;
+        font-weight: 600;
+        min-width: 120px;
+    }
+
+    .total-header, .total-value-cell {
+        background-color: rgba(var(--highlight-rgb), 0.1);
+        font-weight: bold;
+    }
+    
+    /* Expanded (Detail) Rows */
+    .detail-row {
+        background-color: rgba(0, 0, 0, 0.1);
+        font-size: 0.9em;
+    }
+
+    .date-cell {
+        text-align: left;
+        color: var(--text-color-light);
+        padding-left: 20px;
+    }
+    
+    .expand-btn {
+        background: none;
+        border: none;
+        color: var(--primary-color);
+        font-size: 1.2em;
+        cursor: pointer;
+        padding: 0 5px;
+    }
+    
+    .expand-btn-cell {
+        width: 30px;
+    }
+}

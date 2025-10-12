@@ -1,0 +1,144 @@
+/* src/styles/SquadMembersPage.css */
+
+/* Component specific container adjustments */
+.squad-members-card {
+    /* Ensure the card is centered and readable on larger screens */
+    max-width: 600px;
+    padding: var(--spacing-lg);
+}
+
+.card-title {
+    margin-bottom: var(--spacing-lg);
+    border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+    padding-bottom: var(--spacing-sm);
+}
+
+.card-subtitle {
+    font-size: 1.2rem;
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* --- Member List Styling --- */
+.member-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px; /* Tighter gap for a subtle striped/separated look */
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: var(--border-radius-sm);
+    overflow: hidden; /* Clips the border radius correctly */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.member-list-item {
+    display: flex;
+    justify-content: space-between; /* Push info left, actions right */
+    align-items: center;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background-color: #ffffff; /* Base background for list items */
+    transition: background-color 0.2s ease;
+}
+
+.member-list-item:nth-child(odd) {
+    background-color: #f7f7f7; /* Light striping for readability */
+}
+
+.member-list-item:hover {
+    background-color: #e8e8e8; /* Subtle hover highlight */
+}
+
+/* Member Information */
+.member-info {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Take up available space */
+}
+
+.admin-name {
+    color: var(--color-primary);
+    font-weight: 700;
+}
+
+.member-username {
+    font-size: 0.85rem;
+    color: #6c757d; /* Muted color for the username */
+}
+
+/* Member Actions */
+.member-actions {
+    flex-shrink: 0;
+    margin-left: var(--spacing-md);
+}
+
+.member-actions button {
+    /* Ensure buttons fit the list item height */
+    padding: 0.3em 0.6em;
+    font-size: 0.85rem;
+    max-width: 90px;
+}
+
+/* --- Invite Section Styling --- */
+.invite-section {
+    padding-top: var(--spacing-md);
+    margin-top: var(--spacing-md);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.form-inline {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+    margin-bottom: var(--spacing-sm);
+}
+
+.invite-input {
+    flex-grow: 1;
+    padding: 0.6em 0.8em;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: var(--border-radius-sm);
+}
+
+.invite-btn {
+    flex-shrink: 0;
+}
+
+/* Message Styles */
+.message {
+    padding: 0.5rem;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.9rem;
+    margin-top: var(--spacing-sm);
+}
+
+.success-message {
+    background-color: rgba(40, 167, 69, 0.1); /* Light green */
+    color: var(--color-success, #28a745);
+    border: 1px solid var(--color-success, #28a745);
+}
+
+.error-message {
+    background-color: rgba(220, 53, 69, 0.1); /* Light red */
+    color: var(--color-danger, #dc3545);
+    border: 1px solid var(--color-danger, #dc3545);
+}
+
+/* --- Admin/Non-Admin Action Group --- */
+.admin-actions,
+.non-admin-actions {
+    /* Ensures the action group sits lower and uses consistent spacing */
+    margin-top: var(--spacing-lg); 
+}
+
+/* Ensure action group buttons are full width on mobile, and standard width on desktop */
+@media (max-width: 767px) {
+    .admin-actions > button,
+    .non-admin-actions > button {
+        width: 100%;
+        margin-bottom: var(--spacing-sm);
+    }
+}
