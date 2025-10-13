@@ -1,8 +1,8 @@
 // src/pages/SquadGoalSubmissionPage.tsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import "./../styles/global.css";
-import "./../styles/SquadMembersPage.css"; // Dedicated CSS for this component
+import "@styles/global.css";
+import "@styles/SquadMembersPage.css"; // Dedicated CSS for this component
 
 interface SquadMember {
   username: string;

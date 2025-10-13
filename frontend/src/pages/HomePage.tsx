@@ -1,6 +1,6 @@
 // src/pages/HomePage.tsx
 import React from "react";
-import "./../styles/global.css";
+import "@styles/global.css";
 
 const HomePage: React.FC = () => {
   return (

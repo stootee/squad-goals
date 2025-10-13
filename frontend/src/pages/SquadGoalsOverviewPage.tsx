@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
-import "./../styles/global.css";
-import "./../styles/SquadDailyOverviewPage.css"; 
+import "@styles/global.css";
+import "@styles/SquadDailyOverviewPage.css"; 
 
 interface Entry {
   goal_id: string;

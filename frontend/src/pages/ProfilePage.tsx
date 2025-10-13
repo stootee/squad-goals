@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@components/AppLayout";
-import "./../styles/global.css";
-import "./../styles/ProfilePage.css";
+import "@styles/global.css";
+import "@styles/ProfilePage.css";
 
 interface Profile {
   name?: string;

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@components/AppLayout";
-import "./../styles/global.css";
+import "@styles/global.css";
 
 interface Squad {
   id: string;

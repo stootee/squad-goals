@@ -1,7 +1,7 @@
 // src/pages/SquadGoalSubmissionPage.tsx
 import React, { useEffect, useState, useMemo } from "react";
-import "./../styles/global.css";
-import "./../styles/SquadGoalSubmissionPage.css"; // Dedicated CSS for table layout
+import "@styles/global.css";
+import "@styles/SquadGoalSubmissionPage.css"; // Dedicated CSS for table layout
 
 interface Goal {
   id: string;
@@ -11,7 +11,7 @@ interface Goal {
 }
 
 interface UserEntries {
-  [goalId: string]: { [date: string]: number };
+  [goalId: string]: { [date: string]: number | string };
 }
 
 interface SquadGoalSubmissionPageProps {

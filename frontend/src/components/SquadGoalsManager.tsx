@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import "../styles/global.css";
+import "@styles/global.css";
 
 interface Goal {
   id?: string;

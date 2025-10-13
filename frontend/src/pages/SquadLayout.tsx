@@ -5,7 +5,7 @@ import SquadDailyOverviewPage from "@pages/SquadGoalsOverviewPage";
 import SquadGoalsManagerPage from "@pages/SquadGoalsManagerPage";
 import SquadGoalEntryPage from "@pages/SquadGoalEntryPage";
 import AppLayout from "@components/AppLayout";
-import "./../styles/global.css";
+import "@styles/global.css";
 
 // Define a type for the possible tab keys
 type SquadTabKey = "today" | "submission" | "progress" | "members" | "goals";
@@ -66,7 +66,6 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
 
   return (
     <AppLayout title={squadName}>
-      {/* Tabs container with proper ARIA role */}
       <nav className="tabs" aria-label="Squad Views" role="tablist">
         {tabs.map(({ key, label }) => (
           <button
@@ -75,7 +74,6 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
             className={`nav-btn ${activeTab === key ? "active" : ""}`}
             onClick={() => handleTabChange(key)}
             role="tab"
-            aria-selected={activeTab === key ? "true" : "false"}
           >
             {label}
           </button>
@@ -84,11 +82,13 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
 
       {/* Main content area for the selected tab */}
       <div className="glass-card" role="tabpanel">
-        {activeTab === "today" && <SquadGoalEntryPage squadId={squadId} />}
-        {activeTab === "submission" && <SquadGoalSubmissionPage squadId={squadId} />}
-        {activeTab === "members" && <SquadMembersPage squadId={squadId} />}
-        {activeTab === "progress" && <SquadDailyOverviewPage squadId={squadId} />}
-        {activeTab === "goals" && <SquadGoalsManagerPage squadId={squadId} isAdmin={isAdmin} />}
+        <div className="glass-inner">
+          {activeTab === "today" && <SquadGoalEntryPage squadId={squadId} />}
+          {activeTab === "submission" && <SquadGoalSubmissionPage squadId={squadId} />}
+          {activeTab === "members" && <SquadMembersPage squadId={squadId} />}
+          {activeTab === "progress" && <SquadDailyOverviewPage squadId={squadId} />}
+          {activeTab === "goals" && <SquadGoalsManagerPage squadId={squadId} isAdmin={isAdmin} />}
+        </div>
       </div>
     </AppLayout>
   );

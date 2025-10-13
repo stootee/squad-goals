@@ -1,8 +1,8 @@
 // src/components/SquadGoalsManager.tsx
 import React, { useEffect, useState } from "react";
 // Removed external CSS imports to resolve compilation errors
-import "./../styles/global.css"; 
-import "./../styles/SquadGoalsManagerPage.css"; 
+import "@styles/global.css"; 
+import "@styles/SquadGoalsManagerPage.css"; 
 
 // --- INTERFACE DEFINITIONS ---
 
@@ -110,7 +110,7 @@ const SquadGoalsManager: React.FC<SquadGoalsManagerProps> = ({ squadId, isAdmin 
   };
   
   // --- HANDLERS ---
-  const handleChange = (index: number, field: keyof Goal, value: string | number) => {
+  const handleChange = (index: number, field: keyof Goal, value: string | number | undefined) => {
     // SECURITY CHECK: Only allow admins to edit goal fields
     if (!isAdmin) return;
     
