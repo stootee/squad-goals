@@ -81,14 +81,14 @@ html, body {
   color: var(--color-danger);
 }
 
-/* Main Content Push Down */
+/* Main Content Push Down (Mobile) */
 .app-main {
-  padding-top: 65px; 
+  /* Increased padding to clear the fixed header when its content (title + nav) is stacked. */
+  padding-top: 120px; 
   flex: 1;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 0;
   overflow-y: auto;
 }
 
@@ -99,8 +99,9 @@ html, body {
   border-radius: var(--border-radius-lg);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   padding: var(--spacing-md);
+  /* Rely on app-main padding for top clearance; set top margin to 0 */
+  margin: 0 auto var(--spacing-sm) auto; 
   width: 98%;
-  margin: var(--spacing-sm) auto; 
   max-width: var(--max-content-width);
   transition: width 0.3s ease, padding 0.3s ease;
 }
@@ -125,14 +126,14 @@ html, body {
 }
 
 .glass-inner {
-  background: rgba(106, 243, 172, 0.505);
+  background: rgba(106, 243, 172, 0.114);
   border-radius: var(--border-radius-md);
   padding: var(--spacing-md);
   box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
 /* ----------------------------------------------------------------- */
-/* ⭐ NEW BASE INPUT STYLING (Clear background, Dark Border, Rounded Corners) ⭐ */
+/* BASE INPUT STYLING */
 /* ----------------------------------------------------------------- */
 input:not([type="submit"]):not([type="button"]):not([type="reset"]),
 textarea,
@@ -146,7 +147,7 @@ select {
     /* 3. Rounded corners */
     border-radius: var(--border-radius-sm); 
     
-    /* NEW: Adjusted font weight for less heavy text */
+    /* Adjusted font weight for less heavy text */
     font-weight: 400; 
     
     /* Base padding and focus styles for usability */
@@ -166,10 +167,10 @@ select:focus {
     box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25); /* Subtle focus ring */
     background: white; /* Make the background solid white on focus for better readability */
 }
-/* ----------------------------------------------------------------- */
-/* ⭐ END NEW BASE INPUT STYLING ⭐ */
-/* ----------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------- */
+/* BUTTON STYLING */
+/* ----------------------------------------------------------------- */
 button, .submit-btn {
   background: linear-gradient(145deg, #f9f9f9, #e1e1e1);
   color: var(--color-text-dark);
@@ -220,8 +221,6 @@ button:hover, .submit-btn:hover {
 .tabs {
   display: flex;
   margin: var(--spacing-md) 0;
-  /* Add top margin on mobile to clear fixed header */
-  margin-top: 65px; 
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
   padding-bottom: var(--spacing-sm);
   width: 100%;
@@ -237,10 +236,9 @@ button:hover, .submit-btn:hover {
 /* Remove button appearance from tabs */
 .tabs button {
   flex: 1;
-  /* Replaced min-width: fit-content with max-content for better compatibility */
-  min-width: -webkit-max-content; /* WebKit prefix */
-  min-width: -moz-max-content;    /* Firefox prefix */
-  min-width: max-content;         /* Standard property */
+  min-width: -webkit-max-content; 
+  min-width: -moz-max-content;    
+  min-width: max-content;         
   text-align: center;
   background: none !important;
   border: none !important;
@@ -292,10 +290,9 @@ max-width: 100%;
       padding: 0.75em var(--spacing-lg);
   }
   
-  /* Main Content Area */
+  /* Main Content Area: Reset padding-top for a single-row header */
   .app-main {
-      padding-top: 65px; 
-      padding: 0;
+      padding-top: 65px; /* Tighter value for desktop single-row header */
   }
 
   /* Content Wrapper */
@@ -303,6 +300,7 @@ max-width: 100%;
       max-width: 1000px;
       width: 90%;
       padding: var(--spacing-lg);
+      /* Desktop-specific top margin */
       margin: calc(var(--spacing-lg) + 5px) auto;
   }
   

@@ -23,7 +23,7 @@ services:
       - ./frontend:/app
       - /app/node_modules   # prevent overwriting container node_modules
     environment:
-      - VITE_API_URL=http://localhost:5050   # Update this if dev server has a different IP
+      - VITE_API_URL=http://squagol:5050   # Update this if dev server has a different IP
     command: ["npm", "run", "dev", "--", "--host"]  # Vite dev server listens on all interfaces
 
 networks:

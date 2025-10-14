@@ -7,7 +7,6 @@ import SquadGoalEntryPage from "@pages/SquadGoalEntryPage";
 import AppLayout from "@components/AppLayout";
 import "@styles/global.css";
 
-// Define a type for the possible tab keys
 type SquadTabKey = "today" | "submission" | "progress" | "members" | "goals";
 
 interface SquadLayoutProps {
@@ -82,13 +81,11 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
 
       {/* Main content area for the selected tab */}
       <div className="glass-card" role="tabpanel">
-        <div className="glass-inner">
-          {activeTab === "today" && <SquadGoalEntryPage squadId={squadId} />}
-          {activeTab === "submission" && <SquadGoalSubmissionPage squadId={squadId} />}
-          {activeTab === "members" && <SquadMembersPage squadId={squadId} />}
-          {activeTab === "progress" && <SquadDailyOverviewPage squadId={squadId} />}
-          {activeTab === "goals" && <SquadGoalsManagerPage squadId={squadId} isAdmin={isAdmin} />}
-        </div>
+        {activeTab === "today" && <SquadGoalEntryPage squadId={squadId} />}
+        {activeTab === "submission" && <SquadGoalSubmissionPage squadId={squadId} />}
+        {activeTab === "members" && <SquadMembersPage squadId={squadId} />}
+        {activeTab === "progress" && <SquadDailyOverviewPage squadId={squadId} />}
+        {activeTab === "goals" && <SquadGoalsManagerPage squadId={squadId} isAdmin={isAdmin} />}
       </div>
     </AppLayout>
   );

@@ -70,7 +70,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({
       <main className="app-main">
         {/* children is rendered inside the standardized content-wrapper */}
         <div className="content-wrapper">
+          <div className="glass-inner">
             {children}
+          </div>
         </div>
       </main>
     </div>
