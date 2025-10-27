@@ -843,42 +843,6 @@ def submit_squad_goal_entry(squad_id, squad):
     return jsonify([entry.to_dict() for entry in entries]), 200
 
 
-@app.route('/api/squads/<squad_id>/goals/entries', methods=['GET'])
-@login_required
-@squad_member_required
-def get_squad_goal_history(squad_id, squad):
-    # Membership is guaranteed by the decorator
-
-    # History assumes filtering by YYYY-MM-DD date strings in boundary_value
-    week_start = request.args.get("start_date")
-    if week_start:
-        try:
-            start_date_obj = datetime.strptime(week_start, "%Y-%m-%d").date()
-        except ValueError:
-            return jsonify({"message": "Invalid start_date format. Must be YYYY-MM-DD"}), 400
-    else:
-        start_date_obj = datetime.now().date() - timedelta(days=6)
-
-    end_date_obj = start_date_obj + timedelta(days=6)
-    
-    # Convert dates to strings for comparison on the boundary_value column
-    start_date_str = start_date_obj.isoformat()
-    end_date_str = end_date_obj.isoformat()
-
-    # FIX: Join with GoalGroup and filter to only time-based goals for date range query
-    entries = GoalEntry.query.join(Goal).join(GoalGroup).filter(
-        GoalEntry.squad_id == squad.id,
-        GoalEntry.user_id == current_user.id,
-        # CRITICAL: Only include entries from time-based groups for date filtering
-        GoalGroup.partition_type.in_(TIME_BASED_PARTITIONS), 
-        # Filter on boundary_value string (only reliable for YYYY-MM-DD values)
-        GoalEntry.boundary_value >= start_date_str,
-        GoalEntry.boundary_value <= end_date_str
-    ).all()
-
-    return jsonify([entry.to_dict() for entry in entries]), 200
-
-
 @app.route("/api/squads/<squad_id>/goals/entry", methods=['GET'])
 @login_required
 @squad_member_required
@@ -1002,8 +966,6 @@ def get_goal_history(squad_id, squad, *, group_id=None):
 
     response_groups = list(grouped.values())
 
-    current_app.logger.info(json.dumps(response_groups, indent=2, default=str))
-
     return jsonify({
         "user_id": current_user.id,
         "squad_id": squad_id,
@@ -1099,34 +1061,6 @@ def delete_goal(squad_id, goal_id):
     db.session.commit()
 
     return jsonify({"message": f"Goal {goal_id} deleted"}), 200
-
-@app.route("/api/squads/<squad_id>/goals/boundaries", methods=["GET"])
-@login_required
-@squad_member_required
-def get_squad_goal_boundaries(squad_id, squad):
-    """
-    Retrieves all unique boundary values (dates or counter numbers) 
-    for all goals in a squad, ordered chronologically/numerically.
-    
-    This is used by the frontend to determine the full extent of history
-    and enable pagination.
-    """
-    unique_boundaries = db.session.query(GoalEntry.boundary_value).filter(
-        GoalEntry.squad_id == squad_id
-    ).distinct().order_by(GoalEntry.boundary_value).all()
-    
-    boundary_list = [b[0] for b in unique_boundaries]
-
-    def try_convert_to_number(s):
-        try:
-            return int(s)
-        except ValueError:
-            return s
-            
-    final_boundaries = [try_convert_to_number(b) for b in boundary_list]
-    
-    
-    return jsonify(final_boundaries), 200
 
 @app.route('/api/squads/<squad_id>/goals/entries/day', methods=['GET'])
 @login_required
