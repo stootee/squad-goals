@@ -1,0 +1,41 @@
+{
+    "name": "Squad Goals (Docker Compose)",
+    
+    // 1. Point to your existing Docker Compose file
+    "dockerComposeFile": "../docker-compose-dev.yml",
+    
+    // 2. Specify the service VS Code should attach to for its workspace
+    // This is typically the main development environment service (e.g., the backend/Flask service).
+    "service": "backend", 
+    
+    // 3. Set the remote workspace folder inside that service
+    // This should match the volume mount path in your docker-compose file (e.g., /workspace or /app).
+    "workspaceFolder": "/workspace", 
+    
+    // 4. Customizations for the environment
+    "customizations": {
+        "vscode": {
+            // Install necessary extensions for both Python (backend) and JavaScript (frontend)
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "dbaeumer.vscode-eslint",
+                "esbenp.prettier-vscode",
+                "vscode.docker"
+            ],
+            // Ensure the Python interpreter path is correct *inside the backend container*
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python", 
+                "terminal.integrated.defaultProfile.linux": "bash"
+            }
+        }
+    },
+    
+    // 5. Forward the necessary ports (Flask and Vite Dev Server)
+    "forwardPorts": [5000, 5173], 
+
+    // 6. Commands to run after the container is created and ready
+    // You might need to install Python dependencies if your Dockerfile doesn't handle it,
+    // or start a development server.
+    "postCreateCommand": "echo 'Dev Environment ready. Use the Terminal to start backend and frontend services.'"
+}

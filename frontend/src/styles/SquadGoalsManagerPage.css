@@ -15,6 +15,93 @@
     border-bottom: 1px solid rgba(0, 0, 0, 0.1);
 }
 
+/* --- Group Configuration Row Styles --- */
+
+.group-partition-editor {
+    margin-bottom: var(--spacing-md);
+}
+
+.group-config-inputs.single-row {
+    /* CRITICAL: Ensures content is aligned and on one line */
+    display: flex; 
+    flex-wrap: nowrap; 
+    align-items: center; 
+    /* FIX: Increased gap from var(--spacing-xs) (e.g., 4px) to var(--spacing-sm) (e.g., 8px) 
+       to create clear separation between ALL elements (labels and inputs). */
+    gap: var(--spacing-sm); 
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-sm) 0;
+    width: 100%; 
+}
+
+.group-config-inputs .input-label {
+    /* Labels remain compact */
+    white-space: nowrap; 
+    font-size: 0.9em;
+    font-weight: 500;
+    color: var(--color-text-subtle, #555);
+    flex-shrink: 0; 
+    
+    /* REMOVED: padding-right: 4px; -- Relying solely on the gap property now. */
+}
+
+.group-config-inputs .compact-input {
+    /* Base style */
+    padding: 6px 8px; 
+    height: 32px; 
+    font-size: 0.85em; 
+    flex-shrink: 1; 
+    flex-grow: 0; 
+}
+
+/* Specific narrow style for all responsive inputs in this row */
+.group-config-inputs .narrow-input,
+.partition-type-select,
+.counter-name-input {
+    /* Uses flex-basis and flex-grow for responsiveness */
+    flex-basis: 120px; 
+    flex-grow: 1; 
+    min-width: 80px; 
+}
+
+/* Further narrow down counter inputs (Start/End for CustomCounter) */
+.group-config-inputs .narrow-input[type="number"] {
+    flex-basis: 70px; 
+    flex-grow: 1; 
+    min-width: 50px;
+    text-align: center;
+}
+
+/* Narrow down the partition type dropdown */
+.partition-type-select {
+    flex-basis: 110px;
+    flex-grow: 1;
+    min-width: 90px;
+}
+
+/* Give a bit more space to the custom partition name if used */
+.counter-name-input {
+    flex-basis: 140px;
+    flex-grow: 1.5;
+}
+
+
+.partition-info-text {
+    font-size: 0.85em;
+    color: var(--color-text-subtle, #777);
+    margin-top: var(--spacing-xs);
+    border-top: 1px dashed rgba(0, 0, 0, 0.05);
+    padding-top: var(--spacing-xs);
+}
+
+.save-status-indicator {
+    color: var(--color-warning, orange);
+    font-style: italic;
+    margin-left: var(--spacing-xs);
+}
+
+/* --- Goal List Styles (Unchanged) --- */
+
 .goals-responsive-area {
     width: 100%;
     overflow-x: auto; 
@@ -76,7 +163,6 @@
 .goal-target-input {
     flex-basis: 20%;
     max-width: 100px;
-    /* This will be overridden by global CSS, then reset back to center on desktop */
     text-align: center; 
     flex-grow: 0; 
     flex-shrink: 0;
@@ -175,3 +261,143 @@
         max-width: 80px;
     }
 }
+
+/* Collapsible cards (mobile-first) */
+.collapsible-card {
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.08);
+    background: #ffffff;
+    margin: 0.5rem 0;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  
+  /* Header is a button for accessibility */
+  .collapsible-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-align: left;
+  }
+  
+  .collapsible-header:focus {
+    outline: 3px solid rgba(21,156,228,0.25);
+    outline-offset: 2px;
+  }
+  
+  /* Title + indicator layout */
+  .collapsible-title {
+    display: inline-block;
+    margin-right: 0.5rem;
+  }
+  
+  .collapsible-indicator {
+    font-size: 1rem;
+    opacity: 0.8;
+    margin-left: 0.5rem;
+  }
+  
+  /* Content area */
+  .collapsible-content {
+    padding: 0.75rem 1rem 1rem 1rem;
+    transition: all 240ms ease;
+  }
+  
+  /* Small utility adjustments for collapsed look */
+  .collapsible-card.closed .collapsible-header {
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+  }
+  
+  /* Make sure forms inside cards remain compact and readable */
+  .group-config-inputs,
+  .new-goal-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  
+  .group-config-inputs .input-label,
+  .input-label {
+    min-width: 72px;
+    font-size: 0.85rem;
+    color: #333;
+    margin-right: 0.25rem;
+  }
+  
+  /* Inputs remain touch-friendly */
+  .input {
+    padding: 0.5rem 0.6rem;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 6px;
+    min-height: 40px;
+    font-size: 0.95rem;
+  }
+  
+  /* Compact variants used throughout */
+  .compact-input {
+    padding: 0.45rem 0.5rem;
+    min-height: 36px;
+  }
+  
+  .narrow-input {
+    width: 110px;
+  }
+  
+  .counter-name-input {
+    min-width: 150px;
+    flex: 1 1 180px;
+  }
+  
+  .partition-type-select {
+    min-width: 140px;
+  }
+  
+  /* Partition info text */
+  .partition-info-text {
+    font-size: 0.88rem;
+    color: rgba(0,0,0,0.7);
+    margin-top: 0.5rem;
+  }
+  
+  /* Buttons */
+  .submit-btn {
+    padding: 0.45rem 0.8rem;
+    border-radius: 6px;
+    border: 0;
+    cursor: pointer;
+    min-height: 36px;
+  }
+  
+  .add-btn.success-btn {
+    background: #1e7e34;
+    color: white;
+  }
+  
+  .remove-btn.danger-btn {
+    background: #c82333;
+    color: white;
+  }
+  
+  /* Responsive: desktop expands by default visually (we already handle state in JS) */
+  @media (min-width: 721px) {
+    .collapsible-content {
+      padding: 1rem 1.2rem 1.2rem 1.2rem;
+    }
+  
+    .collapsible-header {
+      padding: 0.9rem 1.2rem;
+    }
+  
+    .counter-name-input {
+      min-width: 220px;
+    }
+  }
+  

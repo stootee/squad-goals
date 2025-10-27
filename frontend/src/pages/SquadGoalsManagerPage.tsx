@@ -1,226 +1,347 @@
-// src/components/SquadGoalsManager.tsx
-import React, { useEffect, useState } from "react";
-// Removed external CSS imports to resolve compilation errors
-import "@styles/global.css"; 
-import "@styles/SquadGoalsManagerPage.css"; 
+// FILE: src/components/SquadGoalsManager.tsx
+import React from "react";
+import { useSquadGoalsManager, GOAL_TYPE_OPTIONS, GOAL_CONFIGS, needsTargets } from "../hooks/useSquadGoalsManager";
+import type { Goal, GoalGroup } from "../hooks/useSquadGoalsManager";
+// Import Mantine's responsive styling hooks
+import { TextInput, Select, Button, Group, Paper, Collapse, Divider, Stack, Title, Box, Flex } from "@mantine/core";
 
-// --- INTERFACE DEFINITIONS ---
+// ***********************************************************************************
+// CollapsibleCardLocal: No functional changes needed.
+// ***********************************************************************************
 
-interface Goal {
-  id?: string;
-  name: string;
-  type: string;
-  target?: number;
-  is_private: boolean;
-  is_active: boolean;
-  squad_id?: string;
-}
-
-interface SquadGoalsManagerProps {
-  squadId: string;
-  // CRITICAL ADDITION: Prop to check user's administrative status
-  isAdmin: boolean; 
-}
-
-// --- REACT COMPONENT ---
-
-const SquadGoalsManager: React.FC<SquadGoalsManagerProps> = ({ squadId, isAdmin }) => {
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [newGoal, setNewGoal] = useState({ name: "", type: "", target: "" });
-
-  const apiURL = window.APP_CONFIG?.API_URL || "/api";
-
-  useEffect(() => {
-    loadGoals();
-  }, [squadId, apiURL]); 
-
-  // --- API CALLS ---
-  const loadGoals = async () => {
+const CollapsibleCardLocal: React.FC<any> = ({ id, title, defaultOpen = true, children, squadId }) => {
+  const storageKey = `squad:${squadId}:card:${id}:open`;
+  const [open, setOpen] = React.useState<boolean>(() => {
     try {
-      const res = await fetch(`${apiURL}/squads/${squadId}/goals`, { credentials: "include" });
-      if (res.ok) setGoals(await res.json());
-    } catch (err) {
-      console.error("Error loading goals:", err);
-    }
-  };
-
-  const saveGoal = async (goal: Goal) => {
-    // SECURITY CHECK: Only allow admins to save changes
-    if (!isAdmin) return; 
-    
-    if (!goal.name.trim() || !goal.type.trim()) return;
+      const raw = localStorage.getItem(storageKey);
+      if (raw !== null) return raw === "1";
+    } catch (e) {}
+    // Default to closed on screens smaller than large desktop (e.g., 1024px)
+    return typeof window !== "undefined" ? (window.innerWidth > 1024 ? defaultOpen : false) : defaultOpen;
+  });
+  React.useEffect(() => {
     try {
-      const res = await fetch(`${apiURL}/squads/${squadId}/goals`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ goals: [goal] }),
-      });
-      if (res.ok) return (await res.json())[0];
-    } catch (err) {
-      console.error("Error saving goal:", err);
-    }
-  };
-
-  const removeGoal = async (goal: Goal, index: number) => {
-    // SECURITY CHECK: Only allow admins to remove goals
-    if (!isAdmin) return; 
-
-    if (goal.id) {
-      // NOTE: Replace window.confirm with a custom modal in a real application
-      if (!window.confirm(`Delete goal: ${goal.name}?`)) return;
-
-      try {
-        const res = await fetch(`${apiURL}/squads/${squadId}/goals/${goal.id}`, {
-          method: "DELETE",
-          credentials: "include",
-        });
-        if (!res.ok) {
-          const data = await res.json();
-          // NOTE: Replace alert with a message component.
-          alert(data.error || "Failed to delete goal");
-          return;
-        }
-      } catch (err) {
-        console.error("Error deleting goal:", err);
-        return;
-      }
-    }
-    setGoals((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const addGoal = async () => {
-    // SECURITY CHECK: Only allow admins to add goals
-    if (!isAdmin) return; 
-
-    if (!newGoal.name.trim() || !newGoal.type.trim()) return;
-
-    const goal: Goal = {
-      name: newGoal.name,
-      type: newGoal.type,
-      target: newGoal.target ? Number(newGoal.target) : undefined,
-      is_private: true,
-      is_active: true,
-      squad_id: squadId,
-    };
-
-    const savedGoal = await saveGoal(goal);
-    if (savedGoal) setGoals((prev) => [...prev, savedGoal]);
-    setNewGoal({ name: "", type: "", target: "" });
-  };
-  
-  // --- HANDLERS ---
-  const handleChange = (index: number, field: keyof Goal, value: string | number | undefined) => {
-    // SECURITY CHECK: Only allow admins to edit goal fields
-    if (!isAdmin) return;
-    
-    const updated = [...goals];
-    (updated[index] as any)[field] = value;
-    setGoals(updated);
-    if (updated[index].id) saveGoal(updated[index]);
-  };
-
-  // Prevents the numeric input from changing values when scrolling
-  const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
-    (e.target as HTMLInputElement).blur();
-  };
+      localStorage.setItem(storageKey, open ? "1" : "0");
+    } catch (e) {}
+  }, [open, storageKey]);
 
   return (
-    <div className="squad-goals-manager"> 
-      <h2 className="manager-title">
-        {/* Title indicates the current mode */}
-        {/* This title will show (Admin) if the prop is true */}
-        {isAdmin ? "Manage Squad Goals (Admin)" : "Configured Squad Goals"}
-      </h2>
+    <Paper shadow="xs" p="sm" mb="sm">
+      <Button
+        variant="subtle"
+        fullWidth
+        onClick={() => setOpen((o) => !o)}
+        justify="space-between"
+        style={{ padding: '0 8px' }}
+      >
+        <span>{title}</span>
+        <span>{open ? "▾" : "▸"}</span>
+      </Button>
+      <Collapse in={open}>
+        <Box pt="xs">
+          {children}
+        </Box>
+      </Collapse>
+    </Paper>
+  );
+};
 
-      {/* Container for scrollable content on small screens (overflow-x: auto) */}
-      <div className="goals-responsive-area">
-        
-        {/* List of existing goals */}
-        <ul className="goals-list">
-          {goals.map((goal, index) => (
-            <li key={goal.id || `temp-${index}`} className="goal-list-item">
-              <input
-                type="text"
-                value={goal.name}
-                placeholder="Goal name"
-                onChange={(e) => handleChange(index, "name", e.target.value)}
-                className="input goal-input goal-name-input"
-                // Inputs are enabled only for admins (disabled=false)
-                disabled={!isAdmin} 
-              />
-              <input
-                type="text"
-                value={goal.type}
-                placeholder="Type"
-                onChange={(e) => handleChange(index, "type", e.target.value)}
-                className="input goal-input goal-type-input"
-                // Inputs are enabled only for admins
+const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ squadId, isAdmin }) => {
+  const {
+    goals,
+    activeGroup,
+    isGroupLoading,
+    hasGroupChanged,
+    newGoal,
+    addGoal,
+    removeGoal,
+    handleChange,
+    handleNewGoalChange,
+    handleGroupConfigChange,
+    handleWheel,
+  } = useSquadGoalsManager(squadId, isAdmin);
+
+  // ***********************************************************************************
+  // renderTargetInputs & renderTypeDropdown: Use responsive minWidth for small
+  // screens and a fixed max-width for desktop to prevent stretching.
+  // ***********************************************************************************
+
+  const renderTargetInputs = (goal: Pick<Goal, "type" | "target" | "target_max">, index?: number) => {
+    const config = GOAL_CONFIGS[goal.type.toLowerCase()] || GOAL_CONFIGS["count"];
+    const isNew = index === undefined;
+    if (!needsTargets(goal.type)) return null;
+
+    const targetValue = isNew ? (goal as any).target : goals[index!].target;
+    const targetMaxValue = isNew ? (goal as any).target_max : goals[index!].target_max;
+
+    const targetHandler = isNew
+      ? (e: React.ChangeEvent<HTMLInputElement>) => handleNewGoalChange("target", e.target.value)
+      : (e: React.ChangeEvent<HTMLInputElement>) => handleChange(index!, "target", e.target.value);
+
+    const targetMaxHandler = isNew
+      ? (e: React.ChangeEvent<HTMLInputElement>) => handleNewGoalChange("target_max", e.target.value)
+      : (e: React.ChangeEvent<HTMLInputElement>) => handleChange(index!, "target_max", e.target.value);
+
+    return (
+      // Use Flex to force targets side-by-side, but allow it to take up available space
+      <Flex gap="xs" style={{ flexGrow: 1, minWidth: 140 }}>
+        <TextInput
+          value={targetValue ?? ""}
+          placeholder={config.targetPlaceholder}
+          size="xs"
+          style={{ flex: 1, minWidth: 60, maxWidth: 100 }} // Max width added for desktop control
+          onChange={targetHandler}
+          onWheel={handleWheel}
+          disabled={!isAdmin}
+        />
+        {config.targetMaxLabel && (
+          <TextInput
+            value={targetMaxValue ?? ""}
+            placeholder={config.targetMaxPlaceholder}
+            size="xs"
+            style={{ flex: 1, minWidth: 60, maxWidth: 100 }} // Max width added for desktop control
+            onChange={targetMaxHandler}
+            onWheel={handleWheel}
+            disabled={!isAdmin}
+          />
+        )}
+      </Flex>
+    );
+  };
+
+  const renderTypeDropdown = (goal: Pick<Goal, "type">, index?: number) => {
+    const isNew = index === undefined;
+    const value = isNew ? newGoal.type : goals[index!].type;
+    const handler = isNew
+      ? (e: string) => handleNewGoalChange("type", e)
+      : (val: string) => handleChange(index!, "type", val);
+
+    return (
+      <Select
+        data={GOAL_TYPE_OPTIONS.map((t) => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))}
+        value={value}
+        onChange={handler}
+        disabled={!isAdmin}
+        size="xs"
+        style={{ flex: 1, minWidth: 100, maxWidth: 150 }} // Max width added for desktop control
+      />
+    );
+  };
+
+  // ***********************************************************************************
+  // renderPartitionInputs: Using responsive max-width.
+  // ***********************************************************************************
+
+  const renderPartitionInputs = (activeGroup: GoalGroup) => {
+    const type = activeGroup.partition_type;
+    const sanitizeInputForDisplay = (value: string, inputType: "date" | "datetime-local") => {
+      if (type === "CustomCounter") return value;
+      return value || "";
+    };
+
+    if (type === "CustomCounter") {
+      return (
+        <Group spacing="xs" align="flex-end" wrap="wrap" grow style={{ flex: 1 }}>
+          <TextInput
+            label="Name"
+            value={activeGroup.partition_label ?? ""}
+            placeholder="Sprint, Hole"
+            size="xs"
+            onChange={(e) => handleGroupConfigChange("partition_label", e.target.value)}
+            disabled={!isAdmin}
+            style={{ flex: 1, minWidth: 100, maxWidth: 150 }}
+          />
+          <TextInput
+            label="Start"
+            type="number"
+            value={activeGroup.start_date || "1"}
+            size="xs"
+            onChange={(e) => handleGroupConfigChange("start_date", e.target.value)}
+            onWheel={handleWheel}
+            disabled={!isAdmin}
+            style={{ flex: 1, minWidth: 60, maxWidth: 100 }}
+          />
+          <TextInput
+            label="End (Optional)"
+            type="number"
+            value={activeGroup.end_date ?? ""}
+            size="xs"
+            onChange={(e) => handleGroupConfigChange("end_date", e.target.value)}
+            onWheel={handleWheel}
+            disabled={!isAdmin}
+            style={{ flex: 1, minWidth: 60, maxWidth: 100 }}
+          />
+        </Group>
+      );
+    }
+
+    const isDateTime = ["Minute", "Hourly"].includes(type);
+    const inputType = isDateTime ? "datetime-local" : "date";
+
+    return (
+      <Group spacing="xs" align="flex-end" wrap="wrap" grow style={{ flex: 1 }}>
+        <TextInput
+          label="Start"
+          type={inputType}
+          value={sanitizeInputForDisplay(activeGroup.start_date, inputType)}
+          size="xs"
+          onChange={(e) => handleGroupConfigChange("start_date", e.target.value)}
+          disabled={!isAdmin}
+          style={{ flex: 1, minWidth: 120, maxWidth: 200 }}
+        />
+        <TextInput
+          label="End"
+          type={inputType}
+          value={sanitizeInputForDisplay(activeGroup.end_date, inputType)}
+          size="xs"
+          onChange={(e) => handleGroupConfigChange("end_date", e.target.value)}
+          disabled={!isAdmin}
+          style={{ flex: 1, minWidth: 120, maxWidth: 200 }}
+        />
+      </Group>
+    );
+  };
+
+  if (isGroupLoading) {
+    return (
+      <Stack spacing="xs">
+        <Title order={3}>Loading Goals...</Title>
+      </Stack>
+    );
+  }
+
+  // ***********************************************************************************
+  // Final Structure:
+  // 1. Overall max-width: Max 900px for desktop.
+  // 2. Goal Items: Use a responsive <Flex> container for the whole line item.
+  //    - `direction="column"` on base (mobile) for stacking.
+  //    - `direction="row"` on 'md' (desktop) for single line.
+  // ***********************************************************************************
+
+  return (
+    // Set a max-width for the entire component (e.g., 900px) to prevent excessive spreading
+    <Stack spacing="sm" style={{ margin: '0 auto' }} maw={900}>
+      <Title order={3}>{isAdmin ? "Manage Squad Goals (Admin)" : "Configured Squad Goals"}</Title>
+
+      {isAdmin && activeGroup && (
+        <CollapsibleCardLocal id="group-config" title="Goal Tracking Period Configuration" squadId={squadId}>
+          <Stack spacing="xs">
+            <Group spacing="xs" align="flex-end" wrap="wrap" grow>
+              <Select
+                label="Grouped"
+                data={["Daily", "Weekly", "BiWeekly", "Monthly", "CustomCounter"].map((t) => ({
+                  value: t,
+                  label: t.replace(/([A-Z])/g, " $1").trim(),
+                }))}
+                value={activeGroup.partition_type}
+                onChange={(val) => handleGroupConfigChange("partition_type", val!)}
                 disabled={!isAdmin}
+                size="xs"
+                style={{ flex: 1, minWidth: 120, maxWidth: 180 }}
               />
-              <input
-                type="number"
-                value={goal.target ?? ""}
-                placeholder="Target"
-                onChange={(e) =>
-                  handleChange(index, "target", e.target.value ? Number(e.target.value) : undefined)
-                }
-                className="input goal-input goal-target-input"
-                onWheel={handleWheel}
-                inputMode="decimal"
-                // Inputs are enabled only for admins
-                disabled={!isAdmin}
-              />
-              
-              {/* REMOVE button only renders for admins */}
-              {isAdmin && (
-                <button
-                  onClick={() => removeGoal(goal, index)}
-                  className="submit-btn remove-btn danger-btn" 
+              {renderPartitionInputs(activeGroup)} 
+            </Group>
+          </Stack>
+
+          <Divider my="xs" />
+          <div style={{ fontSize: 12, marginTop: 4 }}>
+            {activeGroup.partition_type === "CustomCounter"
+              ? `Goals tracked by "${activeGroup.partition_label || "Label Missing"}", from ${activeGroup.start_date || "1"} to ${activeGroup.end_date || "No End"}.`
+              : `Goals partitioned ${activeGroup.partition_type.toLowerCase()}, from ${activeGroup.start_date} to ${activeGroup.end_date}.`}
+            {hasGroupChanged && " (Saving...)"}
+          </div>
+        </CollapsibleCardLocal>
+      )}
+
+      <Stack spacing="xs">
+        {goals
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((goal, index) => (
+            <Paper key={goal.id || `temp-${index}`} shadow="xs" p="sm" withBorder>
+              {/* This is the key change: Flex with responsive direction */}
+              <Flex 
+                gap="xs"
+                wrap="wrap"
+                align="center"
+                direction={{ base: 'column', md: 'row' }} // Stack on mobile, single row on desktop
+                justify="space-between"
+              >
+                {/* 1. Goal Name (must be full width on mobile) */}
+                <TextInput
+                  value={goal.name}
+                  placeholder="Goal name"
+                  size="xs"
+                  onChange={(e) => handleChange(index, "name", e.target.value)}
+                  disabled={!isAdmin}
+                  style={{ flex: 1, minWidth: 150 }} // Allow it to flex
+                  w={{ base: '100%', md: 250 }} // Full width on mobile, fixed width on desktop
+                />
+
+                {/* 2. Type and Targets (will wrap if needed on small screens) */}
+                <Group 
+                  spacing="xs" 
+                  wrap="wrap" 
+                  grow 
+                  align="center" 
+                  style={{ flex: 1, minWidth: 350 }} // Allows this section to flex
+                  w={{ base: '100%', md: 'auto' }} // Full width on mobile, auto-size on desktop
                 >
-                  Remove
-                </button>
-              )}
-            </li>
+                  {renderTypeDropdown(goal, index)}
+                  {renderTargetInputs(goal, index)}
+                </Group>
+                
+                {/* 3. Remove Button (must be at the end of the flex container) */}
+                {isAdmin && (
+                  <Button color="red" size="xs" onClick={() => removeGoal(goal, index)} style={{ flexShrink: 0 }} w={{ base: '100%', md: 'auto' }}>
+                    Remove
+                  </Button>
+                )}
+              </Flex>
+            </Paper>
           ))}
-        </ul>
-      
-        {/* New goal form (Only renders for admins) */}
-        {isAdmin && (
-          <div className="new-goal-form">
-            <input
-              type="text"
+      </Stack>
+
+      {isAdmin && activeGroup && (
+        <CollapsibleCardLocal id="new-goal" title="Add New Goal" squadId={squadId}>
+          {/* Apply the same responsive Flex structure here for the Add New Goal section */}
+          <Flex 
+            gap="xs"
+            wrap="wrap"
+            align="center"
+            direction={{ base: 'column', md: 'row' }}
+            justify="space-between"
+          >
+            {/* 1. New Goal Name */}
+            <TextInput
               placeholder="New Goal name"
               value={newGoal.name}
-              onChange={(e) => setNewGoal({ ...newGoal, name: e.target.value })}
-              className="input goal-input goal-name-input"
+              size="xs"
+              onChange={(e) => handleNewGoalChange("name", e.target.value)}
+              style={{ flex: 1, minWidth: 150 }}
+              w={{ base: '100%', md: 250 }}
             />
-            <input
-              type="text"
-              placeholder="Type (e.g., Count)"
-              value={newGoal.type}
-              onChange={(e) => setNewGoal({ ...newGoal, type: e.target.value })}
-              className="input goal-input goal-type-input"
-            />
-            <input
-              type="number"
-              placeholder="Target"
-              value={newGoal.target}
-              onChange={(e) => setNewGoal({ ...newGoal, target: e.target.value })}
-              className="input goal-input goal-target-input"
-              onWheel={handleWheel}
-              inputMode="decimal"
-            />
-            <button
-              onClick={addGoal}
-              className="submit-btn add-btn success-btn" 
+
+            {/* 2. Type and Targets */}
+            <Group 
+              spacing="xs" 
+              wrap="wrap" 
+              grow 
+              align="center" 
+              style={{ flex: 1, minWidth: 350 }}
+              w={{ base: '100%', md: 'auto' }}
             >
+              {renderTypeDropdown(newGoal)}
+              {renderTargetInputs(newGoal)}
+            </Group>
+
+            {/* 3. Add Button */}
+            <Button color="green" size="xs" onClick={addGoal} style={{ flexShrink: 0 }} w={{ base: '100%', md: 'auto' }}>
               Add
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+            </Button>
+          </Flex>
+        </CollapsibleCardLocal>
+      )}
+    </Stack>
   );
 };
 

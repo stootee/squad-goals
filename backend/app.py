@@ -1,25 +1,37 @@
-from flask import Flask, request, jsonify, send_from_directory
-from models import db, User, UserProfile, Squad, SquadInvite, SquadMember, GoalEntry, Goal, GlobalGoal
+from flask import Flask, request, jsonify, send_from_directory, current_app
+from models import db, User, UserProfile, Squad, SquadInvite, SquadMember, GoalEntry, Goal, GlobalGoal, GoalGroup
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_cors import CORS
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import secrets
+from functools import wraps
+from collections import defaultdict
+import logging
+import sys
+import json
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+
+app = Flask(__name__)
+
+# Force logs to go to stdout
+app.logger.addHandler(logging.StreamHandler(sys.stdout))
+app.logger.setLevel(logging.INFO)
+
 
 # ------------------------
 # APP CONFIG
 # ------------------------
-app = Flask(__name__)
+
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'a_secret_key')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # secure session cookie setup
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-# app.config['SESSION_COOKIE_SAMESITE'] = "None"
 app.config['SESSION_COOKIE_SECURE'] = False
 app.config['SESSION_COOKIE_SAMESITE'] = "Lax"
-
 
 db.init_app(app)
 login_manager = LoginManager()
@@ -28,13 +40,15 @@ login_manager.init_app(app)
 # CORS for frontend
 CORS(
     app, supports_credentials=True, origins=[
-        "http://127.0.0.1:5173", 
-        "http://localhost:5173", 
-        "http://0.0.0.0:5173", 
         "http://192.168.0.200:5173",
         "http://squagol:5173"
         ]
     )
+
+@app.errorhandler(405)
+def method_not_allowed(e):
+    app.logger.error(f"405 Method Not Allowed: {request.method} {request.path}")
+    return {"error": "Method Not Allowed"}, 405
 
 # ------------------------
 # USER LOADER
@@ -58,7 +72,307 @@ def create_tables():
             db.create_all()
 
 # ------------------------
-# API ENDPOINTS (Non-squad endpoints omitted for brevity, assuming they are unchanged)
+# GOAL UTILITY AND VALIDATION 
+# ------------------------
+
+# Define all valid partition types
+VALID_PARTITION_TYPES = [
+    'Minute', 'Hourly', 'Daily', 'Weekly', 'BiWeekly', 'Monthly', 'CustomCounter'
+]
+
+# Define time-based partition types for filtering history queries
+TIME_BASED_PARTITIONS = [
+    'Minute', 'Hourly', 'Daily', 'Weekly', 'BiWeekly', 'Monthly'
+]
+
+# --- HISTORY HELPER FUNCTIONS (New) ---
+
+def step_boundary_back(current_boundary, step, partition_type):
+    """Calculates a boundary key 'step' units backward based on partition type."""
+    if partition_type == 'CustomCounter':
+        try:
+            current_value = int(current_boundary)
+            return str(current_value - step)
+        except ValueError:
+            # If the current_boundary is not a valid int, return it unchanged
+            return current_boundary 
+
+    try:
+        # Assumes boundary is a date string 'YYYY-MM-DD'
+        # Convert to datetime object, ignoring time component for daily/weekly/monthly steps
+        date_obj = datetime.strptime(current_boundary, '%Y-%m-%d').date()
+        
+        if partition_type in ['Daily', 'Hourly', 'Minute']:
+            delta = timedelta(days=step)
+            new_date = date_obj - delta
+        elif partition_type in ['Weekly', 'BiWeekly']:
+            # Adjust step for weeks
+            delta = timedelta(weeks=step)
+            new_date = date_obj - delta
+        elif partition_type == 'Monthly':
+            # Simplified Month Logic
+            new_month = date_obj.month - step
+            new_year = date_obj.year
+            
+            # Handle year wraparound
+            while new_month < 1:
+                new_month += 12
+                new_year -= 1
+            
+            # Use day 1 of the calculated month to maintain consistency
+            new_date = date(new_year, new_month, 1)
+        else:
+            # Default to daily step if partition type is unknown/non-standard date type
+            delta = timedelta(days=step)
+            new_date = date_obj - delta
+        
+        return new_date.strftime('%Y-%m-%d')
+    except ValueError:
+        # Handle cases where boundary_value isn't a parseable date
+        return current_boundary
+
+def calculate_boundary_keys(anchor_boundary, partition_type, page, page_size):
+    """
+    Generates the list of M boundaries for the current page offset.
+    
+    Returns boundaries sorted from oldest to newest (left-to-right on the grid).
+    """
+    boundaries = []
+    
+    # Total number of steps to skip backward to find the newest boundary of the current page
+    total_skip_steps = page * page_size
+    
+    # 1. Determine the newest boundary that should appear in this page
+    # This acts as the anchor for the start of this page's time slice
+    newest_boundary_of_page = step_boundary_back(anchor_boundary, total_skip_steps, partition_type)
+
+    # 2. Calculate the page boundaries by stepping back (page_size - 1) times from the newest boundary
+    for i in range(page_size):
+        # i=0 returns the newest boundary for this page. 
+        # i=page_size-1 returns the oldest boundary for this page.
+        boundary = step_boundary_back(newest_boundary_of_page, i, partition_type)
+        boundaries.append(boundary)
+
+    # 3. Reverse to ensure it is [Oldest Boundary, ..., Newest Boundary] for grid rendering
+    return boundaries[::-1]
+
+def check_goal_status(goal_type, target, target_max, entry_value):
+    """Determines if the goal is met based on type, target, and value."""
+    if entry_value is None or entry_value.strip() == '':
+        return {"status": "not entered", "value": None}
+    
+    status = "unmet"
+    
+    try:
+        # Standard Numeric/Comparison Goals
+        if goal_type in ['count', 'above', 'below', 'range', 'threshold', 'ratio']:
+            value = float(entry_value)
+            target = float(target) if target else None
+
+            if goal_type in ['count', 'above', 'threshold', 'ratio']:
+                if target is not None and value >= target:
+                    status = "met"
+            elif goal_type == 'below':
+                if target is not None and value <= target:
+                    status = "met"
+            elif goal_type == 'range':
+                target_max = float(target_max) if target_max else None
+                if target is not None and target_max is not None and value >= target and value <= target_max:
+                    status = "met"
+
+        # Boolean/Achieved Goals
+        elif goal_type in ['boolean', 'achieved']:
+            if entry_value.lower() in ['true', '1']:
+                status = "met"
+        
+        # Time Goals (Usually always 'met' if a value is entered)
+        elif goal_type == 'time':
+            status = "met" 
+            
+    except (ValueError, TypeError):
+        # Data conversion failure, treat as unmet or unparseable
+        status = "unmet"
+        
+    return {"status": status, "value": entry_value}
+
+def generate_boundary_series(start_date, end_date, partition_type):
+    boundaries = []
+    current = start_date
+
+    while current <= end_date:
+        boundaries.append(current.strftime("%Y-%m-%d"))
+
+        if partition_type == "Daily":
+            current += timedelta(days=1)
+        elif partition_type == "Weekly":
+            current += timedelta(weeks=1)
+        elif partition_type == "BiWeekly":
+            current += timedelta(weeks=2)
+        elif partition_type == "Monthly":
+            current += relativedelta(months=1)
+        else:
+            raise ValueError(f"Unsupported partition type: {partition_type}")
+
+    return boundaries
+
+
+def goal_to_dict(goal):
+    """Uses the Goal model's to_dict method which now includes GoalGroup info."""
+    return goal.to_dict()
+
+# --- END HELPER FUNCTIONS ---
+
+# ------------------------
+# AUTHORIZATION DECORATOR
+# ------------------------
+
+def squad_member_required(f):
+    """Decorator to ensure the current user is a member of the squad."""
+    @wraps(f)
+    def decorated_function(squad_id, *args, **kwargs):
+        squad = Squad.query.get_or_404(squad_id)
+        if current_user not in squad.members:
+            return jsonify({"message": "Not a squad member"}), 403
+        # Pass the retrieved squad object to the view function for efficiency
+        return f(squad_id, squad, *args, **kwargs) 
+    return decorated_function
+
+# ------------------------
+# GOAL GROUP ENDPOINTS
+# ------------------------
+
+@app.route("/api/squads/<squad_id>/groups", methods=["GET"])
+@login_required
+@squad_member_required
+def get_goal_groups(squad_id, squad):
+    """Retrieve all goal groups for a squad."""
+    # Membership is guaranteed by the decorator
+    groups = GoalGroup.query.filter_by(squad_id=squad_id).all()
+    return jsonify([group.to_dict() for group in groups])
+
+
+@app.route("/api/squads/<squad_id>/groups", methods=["POST"])
+@login_required
+def create_goal_group(squad_id):
+    """Create a new Goal Group or update an existing one."""
+    data = request.get_json()
+    
+    squad = Squad.query.get_or_404(squad_id)
+    if current_user.id != squad.admin_id:
+        return jsonify({"error": "Not authorized to manage goals for this squad"}), 403
+
+    group_id = data.get("id")
+    group_name = data.get("group_name")
+    partition_type = data.get("partition_type")
+    
+    # --- PARTITION VALIDATION & DATA EXTRACTION ---
+    
+    if not group_name or not partition_type:
+        return jsonify({"error": "Missing required group fields (group_name, partition_type)"}), 400
+
+    # FIX: Ensure partition type is valid
+    if partition_type not in VALID_PARTITION_TYPES:
+        return jsonify({"error": f"Invalid partition_type: {partition_type}"}), 400
+    
+    # Initialize variables for storage. If not set conditionally, they remain None.
+    partition_label = None
+    start_value = None
+    end_value = None
+    start_date = None
+    end_date = None
+    
+    is_counter = partition_type == 'CustomCounter'
+
+    if is_counter:
+        # 1. CUSTOM COUNTER LOGIC (Uses start_value, end_value)
+        partition_label = data.get("partition_label")
+        start_value = data.get("start_value")
+        end_value = data.get("end_value")
+
+        if not partition_label:
+            return jsonify({"error": "CustomCounter partition requires a partition_label"}), 400
+        
+        # Validate and convert to integer
+        try:
+            # Note: We ensure conversion to int, with a default of 0 if start_value is None
+            start_value = int(start_value) if start_value is not None else 0
+            # Note: end_value is optional, only convert if provided and not empty
+            # The client side uses an inclusive boundary, so we store the max boundary itself.
+            end_value = int(end_value) if end_value is not None and str(end_value).strip() != '' else None
+            
+            # Optional: Add validation that start_value <= end_value if end_value is set
+            if end_value is not None and start_value >= end_value:
+                return jsonify({"error": "Start value must be less than or equal to end value."}), 400
+
+        except ValueError:
+            return jsonify({"error": "CustomCounter start/end values must be integers."}), 400
+
+    else:
+        # 2. STANDARDIZED DATE/TIME LOGIC (All time-based types)
+        start_date_str = data.get("start_date")
+        end_date_str = data.get("end_date")
+
+        if not start_date_str or not end_date_str:
+            return jsonify({"error": "Missing required group fields (start_date, end_date)"}), 400
+
+        try:
+            # Use .replace('Z', '+00:00') for robust UTC ISO 8601 parsing.
+            start_dt = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+            end_dt = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+            
+            start_date = start_dt
+            end_date = end_dt
+
+        except (ValueError, AttributeError):
+            return jsonify({"error": "Invalid date/datetime format. Use ISO 8601 (YYYY-MM-DDTHH:MM...). "}), 400
+
+        if start_dt >= end_dt:
+            return jsonify({"error": "Start date/time must be before end date/time."}), 400
+            
+    # --- END PARTITION VALIDATION ---
+
+    if group_id:
+        group = GoalGroup.query.filter_by(id=group_id, squad_id=squad_id).first()
+        if not group:
+            return jsonify({"error": f"Goal Group with id {group_id} not found"}), 404
+    else:
+        group = GoalGroup(squad_id=squad_id)
+        db.session.add(group)
+    
+    # Store the appropriate data. 
+    group.group_name = group_name
+    group.partition_type = partition_type
+    group.partition_label = partition_label
+    
+    group.start_value = start_value  
+    group.end_value = end_value      
+    group.start_date = start_date    
+    group.end_date = end_date        
+    
+    db.session.commit()
+    
+    return jsonify(group.to_dict()), 201 if not group_id else 200
+
+
+@app.route("/api/squads/<squad_id>/groups/<group_id>", methods=["DELETE"])
+@login_required
+def delete_goal_group(squad_id, group_id):
+    """Delete a Goal Group and cascade delete all associated Goals and GoalEntries."""
+    squad = Squad.query.get_or_404(squad_id)
+    if current_user.id != squad.admin_id:
+        return jsonify({"error": "Not authorized to manage goals for this squad"}), 403
+
+    group = GoalGroup.query.filter_by(id=group_id, squad_id=squad_id).first_or_404()
+    
+    # The 'cascade="all, delete-orphan"' handles deletion of related Goals and Entries.
+    db.session.delete(group)
+    db.session.commit()
+
+    return jsonify({"message": f"Goal Group {group_id} and all contained goals deleted"}), 200
+
+
+# ------------------------
+# API ENDPOINTS 
 # ------------------------
 @app.route('/api/signup', methods=['POST'])
 def api_signup():
@@ -172,6 +486,7 @@ def reset_password(token):
 
 @app.route('/api/reset_password/<token>', methods=['GET'])
 def serve_reset_password_page(token):
+    # Assuming the frontend handles this
     return send_from_directory('../frontend', 'reset_password.html')
 
 
@@ -202,10 +517,7 @@ def create_squad():
 @app.route('/api/squads/<squad_id>/invite', methods=['POST'])
 @login_required
 def invite_user(squad_id):
-    squad = Squad.query.get(squad_id)
-    if not squad:
-        return jsonify({"message": "Squad not found"}), 404
-
+    squad = Squad.query.get_or_404(squad_id)
     if squad.admin_id != current_user.id:
         return jsonify({"message": "Only the admin can invite"}), 403
 
@@ -239,7 +551,6 @@ def api_invites():
     
     if squad_id:
         # 1. Verify the current user is an admin of the requested squad
-        # Assuming your Squad model has a relationship to the admin User object
         squad = Squad.query.filter_by(id=squad_id).first()
         if not squad or squad.admin.id != current_user.id:
             return jsonify({"error": "Unauthorized access or squad not found."}), 403
@@ -249,7 +560,6 @@ def api_invites():
         
         result = []
         for i in outbound_invites:
-            # Need to look up the invited user's username
             invited_user = User.query.get(i.invited_user_id) 
             
             result.append({
@@ -267,7 +577,6 @@ def api_invites():
     result = []
     for i in invites:
         if i.squad:
-            # Note: Checking for i.squad.admin ensures the squad still exists and has an admin
             admin_username = i.squad.admin.username if i.squad.admin else "Unknown Admin"
 
             result.append({
@@ -338,12 +647,9 @@ def respond_invite(invite_id):
 
 @app.route('/api/squads/<squad_id>', methods=['GET'])
 @login_required
-def get_squad(squad_id):
-    squad = Squad.query.get_or_404(squad_id)
-    
-    if current_user not in squad.members:
-        return jsonify({"message": "You are not a member of this squad and cannot view its details."}), 403
-    
+@squad_member_required
+def get_squad(squad_id, squad):
+    # Membership is guaranteed by the decorator
     members_list = []
     for member in squad.members:
         members_list.append({"username": member.username, "name": member.username})
@@ -359,20 +665,11 @@ def get_squad(squad_id):
 
 @app.route('/api/squads/<squad_id>/profiles', methods=['GET'])
 @login_required
-def api_squad_profiles(squad_id):
-    squad = Squad.query.filter_by(id=squad_id).first()
-    if not squad:
-        return jsonify({"error": "Squad not found."}), 404
+@squad_member_required
+def api_squad_profiles(squad_id, squad):
+    # Membership is guaranteed by the decorator
 
     member_usernames = [member.username for member in squad.members]
-    if current_user.username not in member_usernames:
-        return jsonify({"error": "Access denied. Not a member of this squad."}), 403
-
-    # 2. Get the list of all usernames in the squad
-    # We already have member_usernames from the check above
-
-    # 3. Find the User records matching the usernames
-    # The 'User' model is required here to link username to user_id
     users = User.query.filter(User.username.in_(member_usernames)).all()
     user_ids = [u.id for u in users]
 
@@ -381,7 +678,6 @@ def api_squad_profiles(squad_id):
     profile_data_list = []
     
     user_map = {u.id: u.username for u in users}
-
     profile_map = {p.user_id: p.name for p in profiles}
 
     for user_id, username in user_map.items():
@@ -398,9 +694,11 @@ def api_squad_profiles(squad_id):
 
 @app.route('/api/squads/<squad_id>/leave', methods=['POST'])
 @login_required
-def leave_squad(squad_id):
+@squad_member_required
+def leave_squad(squad_id, squad):
     membership = SquadMember.query.filter_by(squad_id=squad_id, user_id=current_user.id).first()
     if not membership:
+        # Should be caught by the decorator, but double-check in case of race condition
         return jsonify({"message": "You are not a member of this squad"}), 404
 
     db.session.delete(membership)
@@ -456,8 +754,7 @@ def delete_squad(squad_id):
     SquadMember.query.filter_by(squad_id=squad.id).delete()
     SquadInvite.query.filter_by(squad_id=squad.id).delete()
     
-    Goal.query.filter_by(squad_id=squad.id).delete()
-    GoalEntry.query.filter_by(squad_id=squad.id).delete() 
+    # Deletion of Goals, GoalGroups, and GoalEntries is handled by cascade delete on the Squad model
 
     db.session.delete(squad)
     db.session.commit()
@@ -484,82 +781,99 @@ def get_user_squads():
 # ----------------------------------------------
 # GOAL ENTRY & HISTORY
 # ----------------------------------------------
+
 @app.route('/api/squads/<squad_id>/goals/entry', methods=['POST'])
 @login_required
-def submit_squad_goal_entry(squad_id):
-    squad = Squad.query.get_or_404(squad_id)
-    if current_user not in squad.members:
-        return jsonify({"message": "Not a squad member"}), 403
+@squad_member_required
+def submit_squad_goal_entry(squad_id, squad):
+    # Membership is guaranteed by the decorator
 
     data = request.get_json()
-    date_str = data.get("date")
-    values = data.get("values", {})  # keys should now be goal IDs
+    # Boundary value (date string or counter string) is expected in the "date" field
+    boundary_value_input = data.get("date")
+    entries_data = data.get("entries", {}) 
 
-    try:
-        date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return jsonify({"message": "Invalid date format"}), 400
+    # Treat the input as a string for consistent storage
+    if not boundary_value_input:
+        return jsonify({"message": "Invalid or missing entry boundary value."}), 400
+    
+    boundary_value_str = str(boundary_value_input) 
 
-    # Fetch all valid goal IDs for this squad
     valid_goal_ids = {str(g.id) for g in Goal.query.filter_by(squad_id=squad.id).all()}
 
-    for goal_id_str, value in values.items():
+    for goal_id_str, entry_obj in entries_data.items():
         if goal_id_str not in valid_goal_ids:
             print(f"Skipping unknown goal ID: {goal_id_str}")
             continue
+        
+        value = entry_obj.get("value")
+        note = entry_obj.get("note") 
 
         entry = GoalEntry.query.filter_by(
             user_id=current_user.id,
             squad_id=squad.id,
             goal_id=goal_id_str,
-            date=date_obj
+            # Query using the new column name
+            boundary_value=boundary_value_str 
         ).first()
 
         if entry:
             entry.value = value
+            entry.note = note
         else:
             db.session.add(GoalEntry(
                 user_id=current_user.id,
                 squad_id=squad.id,
                 goal_id=goal_id_str,
-                date=date_obj,
-                value=value
+                # Create using the new column name
+                boundary_value=boundary_value_str,
+                value=value,
+                note=note
             ))
 
     db.session.commit()
 
-    # Return updated entries for the date
+    # Return updated entries for the boundary
     entries = GoalEntry.query.filter_by(
         user_id=current_user.id,
         squad_id=squad.id,
-        date=date_obj
+        # Query using the new column name
+        boundary_value=boundary_value_str 
     ).all()
     return jsonify([entry.to_dict() for entry in entries]), 200
 
 
 @app.route('/api/squads/<squad_id>/goals/entries', methods=['GET'])
 @login_required
-def get_squad_goal_history(squad_id):
-    squad = Squad.query.get_or_404(squad_id)
-    if current_user not in squad.members:
-        return jsonify({"message": "Not a squad member"}), 403
+@squad_member_required
+def get_squad_goal_history(squad_id, squad):
+    # Membership is guaranteed by the decorator
 
+    # History assumes filtering by YYYY-MM-DD date strings in boundary_value
     week_start = request.args.get("start_date")
     if week_start:
         try:
-            start_date = datetime.strptime(week_start, "%Y-%m-%d").date()
+            start_date_obj = datetime.strptime(week_start, "%Y-%m-%d").date()
         except ValueError:
-            return jsonify({"message": "Invalid start_date"}), 400
+            return jsonify({"message": "Invalid start_date format. Must be YYYY-MM-DD"}), 400
     else:
-        start_date = datetime.now().date() - timedelta(days=6)
+        start_date_obj = datetime.now().date() - timedelta(days=6)
 
-    end_date = start_date + timedelta(days=6)
+    end_date_obj = start_date_obj + timedelta(days=6)
+    
+    # Convert dates to strings for comparison on the boundary_value column
+    start_date_str = start_date_obj.isoformat()
+    end_date_str = end_date_obj.isoformat()
 
-    entries = GoalEntry.query.join(Goal).filter(
+    # FIX: Join with GoalGroup and filter to only time-based goals for date range query
+    entries = GoalEntry.query.join(Goal).join(GoalGroup).filter(
         GoalEntry.squad_id == squad.id,
         GoalEntry.user_id == current_user.id,
-        GoalEntry.date >= start_date,
-        GoalEntry.date <= end_date
+        # CRITICAL: Only include entries from time-based groups for date filtering
+        GoalGroup.partition_type.in_(TIME_BASED_PARTITIONS), 
+        # Filter on boundary_value string (only reliable for YYYY-MM-DD values)
+        GoalEntry.boundary_value >= start_date_str,
+        GoalEntry.boundary_value <= end_date_str
     ).all()
 
     return jsonify([entry.to_dict() for entry in entries]), 200
@@ -567,36 +881,141 @@ def get_squad_goal_history(squad_id):
 
 @app.route("/api/squads/<squad_id>/goals/entry", methods=['GET'])
 @login_required
-def get_user_goal_entry_for_date(squad_id):
-    squad = Squad.query.get_or_404(squad_id)
-    if current_user not in squad.members:
-        return jsonify({"message": "Not a squad member"}), 403
+@squad_member_required
+def get_user_goal_entry_for_date(squad_id, squad):
+    # Membership is guaranteed by the decorator
 
-    date_str = request.args.get("date")
-    if not date_str:
-        return jsonify({"message": "Date parameter is required"}), 400
+    # Expecting the boundary value (date or counter)
+    boundary_value_input = request.args.get("date")
+    if not boundary_value_input:
+        return jsonify({"message": "Boundary value (date or counter) parameter is required"}), 400
 
-    try:
-        date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError:
-        return jsonify({"message": "Invalid date format"}), 400
+    # Ensure it's a string for querying
+    boundary_value_str = str(boundary_value_input)
 
+    # Note: No join is strictly necessary here as we query by exact boundary_value string
     entries = GoalEntry.query.filter_by(
         user_id=current_user.id,
         squad_id=squad.id,
-        date=date_obj
+        # Query using the new column name
+        boundary_value=boundary_value_str
     ).all()
 
     return jsonify([entry.to_dict() for entry in entries]), 200
 
+@app.route("/api/squads/<squad_id>/goals/history", methods=["GET"])
+@app.route("/api/squads/<squad_id>/goals/history/<group_id>", methods=["GET"])
+@login_required
+@squad_member_required
+def get_goal_history(squad_id, squad, *, group_id=None):
+    """
+    Returns all goal entries for the current user in this squad,
+    filling missing boundaries up to the latest recorded entry.
+    Entries are returned in chronological order (oldest → newest).
+    """
+
+    query = (
+        GoalEntry.query
+        .join(Goal)
+        .filter(
+            GoalEntry.user_id == current_user.id,
+            GoalEntry.squad_id == squad_id
+        )
+    )
+
+    if group_id:
+        query = query.filter(Goal.group_id == group_id)
+
+    entries = query.all()
+    if not entries:
+        return jsonify({
+            "user_id": current_user.id,
+            "squad_id": squad_id,
+            "groups": []
+        }), 200
+
+    grouped = defaultdict(lambda: {
+        "goal_id": None,
+        "goal_name": None,
+        "partition_type": None,
+        "start_value": None,
+        "boundaries": {}
+    })
+
+    # --- Step 1: Collect all entries ---
+    for entry in entries:
+        goal = entry.goal
+        if not goal:
+            continue
+        gid = goal.id
+
+        if grouped[gid]["goal_id"] is None:
+            grouped[gid]["goal_id"] = gid
+            grouped[gid]["goal_name"] = goal.name
+            grouped[gid]["partition_type"] = goal.goal_group.partition_type if goal.goal_group else None
+            grouped[gid]["start_value"] = (
+                goal.goal_group.start_value if "counter" in goal.goal_group.partition_type.lower() else goal.goal_group.start_date.isoformat()
+            )
+
+        grouped[gid]["boundaries"][str(entry.boundary_value)] = {
+            "entry_id": entry.id,
+            "boundary": str(entry.boundary_value),
+            "value": entry.value,
+            "note": entry.note
+        }
+
+    # --- Step 2: Generate full boundary list + fill gaps ---
+    for goal_data in grouped.values():
+        partition_type = goal_data["partition_type"]
+        start_value = goal_data["start_value"]
+        existing_boundaries = list(goal_data["boundaries"].keys())
+        if not existing_boundaries:
+            continue
+
+        if "counter" in partition_type.lower():
+            start = int(start_value)
+            end = max(int(b) for b in existing_boundaries)
+            all_boundaries = [str(i) for i in range(start, end + 1)]
+
+        else:
+            start_date = datetime.fromisoformat(start_value)
+            max_date = max(datetime.fromisoformat(b) for b in existing_boundaries)
+            all_boundaries = generate_boundary_series(start_date, max_date, partition_type)
+
+        # Fill missing with blanks
+        for boundary in all_boundaries:
+            if boundary not in goal_data["boundaries"]:
+                goal_data["boundaries"][boundary] = {
+                    "entry_id": None,
+                    "boundary": boundary,
+                    "value": None,
+                    "note": None
+                }
+
+        # Sort by boundary ascending (latest last)
+        goal_data["boundaries"] = dict(sorted(
+            goal_data["boundaries"].items(),
+            key=lambda x: (
+                int(x[0]) if "counter" in partition_type.lower() else datetime.fromisoformat(x[0])
+            )
+        ))
+
+    response_groups = list(grouped.values())
+
+    current_app.logger.info(json.dumps(response_groups, indent=2, default=str))
+
+    return jsonify({
+        "user_id": current_user.id,
+        "squad_id": squad_id,
+        "groups": response_groups
+    })
+
 
 @app.route("/api/squads/<squad_id>/goals", methods=["GET"])
 @login_required
-def get_goals(squad_id):
-    squad = Squad.query.get_or_404(squad_id)
-    if current_user not in squad.members:
-        return jsonify({"message": "Not a squad member"}), 403
-    goals = [g.to_dict() for g in squad.goals]
+@squad_member_required
+def get_goals(squad_id, squad):
+    goals = [goal.to_dict() for goal in squad.goals]
     return jsonify(goals)
 
 
@@ -604,41 +1023,50 @@ def get_goals(squad_id):
 @login_required
 def update_goals(squad_id):
     """
-    Create or update a single goal for a squad.
-    - If `id` is provided, the goal is updated.
-    - Otherwise, a new goal is created.
+    Create or update a single goal. New goals MUST specify an existing group_id. 
+    Group management is handled by separate group endpoints.
     """
     data = request.get_json()
-    g_data = data.get("goals")[0] # expect a single goal object
+    g_data = data.get("goals", [None])[0] 
 
     if not g_data:
         return jsonify({"error": "No goal data provided"}), 400
 
     squad = Squad.query.get_or_404(squad_id)
-    if current_user not in squad.members:
-        return jsonify({"message": "Not a squad member"}), 403
-
     if current_user.id != squad.admin_id:
         return jsonify({"error": "Not authorized to manage goals for this squad"}), 403
 
     goal_id = g_data.get("id", None)
+    group_id = g_data.get("group_id")
     is_private = g_data.get("is_private", True)
 
+    goal = None
     if goal_id:
         goal = Goal.query.filter_by(id=goal_id, squad_id=squad_id, is_active=True).first()
         if not goal:
             return jsonify({"error": f"Goal with id {goal_id} not found"}), 404
+        if group_id and goal.group_id != group_id:
+             return jsonify({"error": "Goal group_id cannot be changed after creation."}), 400
+    
     else:
-        goal = Goal(squad_id=squad_id, is_active=True)
+        if not group_id:
+            return jsonify({"error": "New goals must provide an existing group_id."}), 400
+            
+        group = GoalGroup.query.filter_by(id=group_id, squad_id=squad_id).first()
+        if not group:
+            return jsonify({"error": f"Goal Group with id {group_id} not found for this squad"}), 404
+
+        goal = Goal(squad_id=squad_id, is_active=True, group_id=group_id)
         db.session.add(goal)
 
     goal.is_private = is_private
-
+    
     if is_private:
         goal.global_goal_id = None
         goal.name = g_data["name"]
         goal.type = g_data["type"]
         goal.target = g_data.get("target")
+        goal.target_max = g_data.get("target_max") 
     else:
         global_id = g_data.get("global_goal_id")
         if not global_id:
@@ -647,9 +1075,11 @@ def update_goals(squad_id):
         if not global_goal:
             return jsonify({"error": f"Global Goal ID {global_id} not found"}), 400
         goal.global_goal_id = global_id
+        
         goal.name = None
         goal.type = None
-        goal.target = g_data.get("target")
+        goal.target = g_data.get("target") 
+        goal.target_max = g_data.get("target_max") 
 
     db.session.commit()
 
@@ -660,9 +1090,6 @@ def update_goals(squad_id):
 @login_required
 def delete_goal(squad_id, goal_id):
     squad = Squad.query.get_or_404(squad_id)
-    if current_user not in squad.members:
-        return jsonify({"message": "Not a squad member"}), 403
-
     if current_user.id != squad.admin_id:
         return jsonify({"error": "Not authorized to manage goals for this squad"}), 403
 
@@ -673,36 +1100,66 @@ def delete_goal(squad_id, goal_id):
 
     return jsonify({"message": f"Goal {goal_id} deleted"}), 200
 
+@app.route("/api/squads/<squad_id>/goals/boundaries", methods=["GET"])
+@login_required
+@squad_member_required
+def get_squad_goal_boundaries(squad_id, squad):
+    """
+    Retrieves all unique boundary values (dates or counter numbers) 
+    for all goals in a squad, ordered chronologically/numerically.
+    
+    This is used by the frontend to determine the full extent of history
+    and enable pagination.
+    """
+    unique_boundaries = db.session.query(GoalEntry.boundary_value).filter(
+        GoalEntry.squad_id == squad_id
+    ).distinct().order_by(GoalEntry.boundary_value).all()
+    
+    boundary_list = [b[0] for b in unique_boundaries]
+
+    def try_convert_to_number(s):
+        try:
+            return int(s)
+        except ValueError:
+            return s
+            
+    final_boundaries = [try_convert_to_number(b) for b in boundary_list]
+    
+    
+    return jsonify(final_boundaries), 200
 
 @app.route('/api/squads/<squad_id>/goals/entries/day', methods=['GET'])
 @login_required
-def get_squad_entries_for_day(squad_id):
-    squad = Squad.query.get_or_404(squad_id)
-    if current_user not in squad.members:
-        return jsonify({"message": "Not a squad member"}), 403
+@squad_member_required
+def get_squad_entries_for_day(squad_id, squad):
 
     date_str = request.args.get("date")
-    start_date_str = request.args.get("start_date")
-    end_date_str = request.args.get("end_date")
+    start_date_str_in = request.args.get("start_date")
+    end_date_str_in = request.args.get("end_date")
 
     try:
-        if start_date_str and end_date_str:
-            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        if start_date_str_in and end_date_str_in:
+            start_date_obj = datetime.strptime(start_date_str_in, "%Y-%m-%d").date()
+            end_date_obj = datetime.strptime(end_date_str_in, "%Y-%m-%d").date()
         elif date_str:
-            start_date = end_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            start_date_obj = end_date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
         else:
-            # Default to current date
-            start_date = end_date = datetime.utcnow().date()
+            start_date_obj = end_date_obj = datetime.utcnow().date()
     except ValueError:
-        return jsonify({"message": "Invalid date format"}), 400
+        return jsonify({"message": "Invalid date format. Must be YYYY-MM-DD"}), 400
+
+    start_date_str = start_date_obj.isoformat()
+    end_date_str = end_date_obj.isoformat()
 
     entries = (
         GoalEntry.query
         .join(User)
+        .join(Goal)
+        .join(GoalGroup)
         .filter(
             GoalEntry.squad_id == squad.id,
-            GoalEntry.date.between(start_date, end_date)
+            GoalGroup.partition_type.in_(TIME_BASED_PARTITIONS),
+            GoalEntry.boundary_value.between(start_date_str, end_date_str) 
         )
         .all()
     )
@@ -710,8 +1167,7 @@ def get_squad_entries_for_day(squad_id):
     grouped = {}
     for entry in entries:
         user_id = entry.user.id
-        date_key = entry.date.isoformat()
-
+        date_key = entry.boundary_value
         if user_id not in grouped:
             grouped[user_id] = {
                 "user_id": user_id,
