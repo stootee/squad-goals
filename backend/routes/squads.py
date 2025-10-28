@@ -89,7 +89,7 @@ def delete_squad(squad_id, squad):
     return jsonify({"message": "Squad deleted"}), 200
 
 
-@squads_bp.route('/squads/<squad_id>/profiles', methods=['GET'])
+@squads_bp.route('/squads/<squad_id>/members', methods=['GET'])
 @login_required
 @squad_member_required
 def squad_profiles(squad_id, squad):
@@ -157,6 +157,42 @@ def leave_squad(squad_id, squad):
     db.session.delete(membership)
     db.session.commit()
     return jsonify({"message": "You left the squad"}), 200
+
+
+@squads_bp.route('/squads/<squad_id>/members/<username>', methods=['DELETE'])
+@login_required
+@squad_admin_required
+def delete_member(squad_id, squad, username):
+    """Remove a member from the squad (admin only)."""
+
+    # Prevent admin from removing themselves
+    if username == squad.admin.username:
+        return jsonify({"message": "Cannot remove the squad administrator"}), 400
+
+    # Look up the user
+    user_to_remove, error = get_user_by_username(username)
+    if error:
+        return error  # get_user_by_username likely returns a tuple (user, response)
+
+    # Check membership
+    membership = SquadMember.query.filter_by(
+        squad_id=squad_id,
+        user_id=user_to_remove.id
+    ).first()
+
+    if not membership:
+        return jsonify({"message": f"{username} is not a member of this squad"}), 404
+
+    # Remove membership and any pending invites
+    db.session.delete(membership)
+    SquadInvite.query.filter_by(
+        squad_id=squad_id,
+        invited_user_id=user_to_remove.id,
+        status='pending'
+    ).delete()
+
+    db.session.commit()
+    return jsonify({"message": f"{username} has been removed from the squad"}), 200
 
 
 @squads_bp.route('/squads/<squad_id>/remove_member', methods=['POST'])

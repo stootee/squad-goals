@@ -1,5 +1,9 @@
 // FILE: src/hooks/useSquadGoalsManager.ts
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Goal } from "@api";
+
+// Re-export Goal for backward compatibility
+export type { Goal };
 
 // --- INTERFACES (shared) ---
 // export interface Goal {
@@ -63,10 +67,11 @@ export interface UseSquadGoalsManagerResult {
 }
 
 export const GOAL_CONFIGS: { [key: string]: any } = {
+  count: { targetLabel: "Target Count", targetPlaceholder: "e.g., 10" },
   target: { targetLabel: "Target Value", targetPlaceholder: "e.g., 10" },
   above: { targetLabel: "Minimum Value", targetPlaceholder: "e.g., 50" },
   below: { targetLabel: "Maximum Value", targetPlaceholder: "e.g., 10" },
-  // time: { targetLabel: "Target Duration", targetPlaceholder: "e.g., 00:30:00" },
+  time: { targetLabel: "Target Duration", targetPlaceholder: "e.g., 00:30:00" },
   threshold: { targetLabel: "Required Metric", targetPlaceholder: "e.g., 2 (Liters)" },
   between: {
     targetLabel: "Target Min",
@@ -81,7 +86,7 @@ export const GOAL_CONFIGS: { [key: string]: any } = {
     targetMaxPlaceholder: "e.g., 1 (Cardio)",
   },
   achieved: { targetLabel: "Status", targetPlaceholder: "Boolean (Achieved)" },
-  // boolean: { targetLabel: "Status", targetPlaceholder: "Boolean (True/False)" },
+  boolean: { targetLabel: "Status", targetPlaceholder: "Boolean (True/False)" },
 };
 
 export const GOAL_TYPE_OPTIONS = Object.keys(GOAL_CONFIGS).sort();

@@ -7,7 +7,7 @@ This module contains helper functions for:
 - Database queries (users, goal entries)
 """
 
-from datetime import datetime, timedelta, date
+from datetime import datetime, date
 from typing import Optional, Tuple, Dict, Any, List, Union
 from flask import jsonify, Response
 from models import User, GoalEntry

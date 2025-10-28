@@ -1,6 +1,15 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import "@styles/global.css";
+import {
+  AppShell,
+  Burger,
+  Group,
+  Button,
+  Title,
+  Container,
+} from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
+import { authApi } from "@api";
 
 interface AppLayoutProps {
   title?: string;
@@ -14,68 +23,119 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   showMenu = true,
 }) => {
   const navigate = useNavigate();
+  const [opened, { toggle, close }] = useDisclosure();
 
   const handleLogout = async () => {
-    // Assuming window.APP_CONFIG is correctly defined globally
-    const apiURL = window.APP_CONFIG.API_URL; 
     try {
-      const response = await fetch(`${apiURL}/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
-      
-      if (response.ok) {
-        // Clear any local storage/session data if necessary
-        navigate("/login");
-      } else {
-        // Handle non-200 responses if needed
-        console.warn("Logout failed with status:", response.status);
-      }
+      await authApi.logout();
+      navigate("/login");
     } catch (err) {
       console.error("Logout error:", err);
+      // Even if logout fails, navigate to login
+      navigate("/login");
     }
   };
-  
-  // Navigate to home on title click
-  const handleTitleClick = () => navigate("/");
+
+  const handleTitleClick = () => {
+    navigate("/");
+    close();
+  };
+
+  const handleNavigation = (path: string) => {
+    navigate(path);
+    close();
+  };
 
   return (
-    <div className="app-layout">
-      <header className="app-header">
-        {/* Use a specific wrapper for the content that needs to be 
-          organized within the responsive header. 
-          The CSS will handle stacking (mobile) vs. side-by-side (desktop).
-        */}
-        <div className="header-content"> 
-          <div className="header-title" onClick={handleTitleClick} role="button" tabIndex={0} onKeyDown={(e) => {if (e.key === 'Enter') handleTitleClick();}}>
-            <h1>{title}</h1>
-          </div>
+    <AppShell
+      header={{ height: 60 }}
+      navbar={{
+        width: 250,
+        breakpoint: 'sm',
+        collapsed: { mobile: !opened, desktop: true },
+      }}
+      padding="md"
+    >
+      <AppShell.Header>
+        <Group h="100%" px="md" justify="space-between">
+          <Group>
+            {showMenu && (
+              <Burger
+                opened={opened}
+                onClick={toggle}
+                hiddenFrom="sm"
+                size="sm"
+              />
+            )}
+            <Title
+              order={3}
+              style={{ cursor: 'pointer' }}
+              onClick={handleTitleClick}
+            >
+              {title}
+            </Title>
+          </Group>
 
           {showMenu && (
-            <nav className="header-nav" aria-label="Main Navigation">
-              <button className="nav-link" onClick={() => navigate("/squads")}>
+            <Group visibleFrom="sm" gap="sm">
+              <Button
+                variant="subtle"
+                onClick={() => handleNavigation("/squads")}
+              >
                 Squads
-              </button>
-              <button className="nav-link" onClick={() => navigate("/profile")}>
+              </Button>
+              <Button
+                variant="subtle"
+                onClick={() => handleNavigation("/profile")}
+              >
                 Profile
-              </button>
-              <button className="nav-link logout" onClick={handleLogout}>
+              </Button>
+              <Button
+                variant="subtle"
+                color="red"
+                onClick={handleLogout}
+              >
                 Logout
-              </button>
-            </nav>
+              </Button>
+            </Group>
           )}
-        </div>
-      </header>
+        </Group>
+      </AppShell.Header>
 
-      <main className="app-main">
-        {/* children is rendered inside the standardized content-wrapper */}
-        <div className="content-wrapper">
-          <div className="glass-inner">
-            {children}
-          </div>
-        </div>
-      </main>
-    </div>
+      <AppShell.Navbar p="md">
+        <Button
+          variant="subtle"
+          fullWidth
+          justify="flex-start"
+          onClick={() => handleNavigation("/squads")}
+        >
+          Squads
+        </Button>
+        <Button
+          variant="subtle"
+          fullWidth
+          justify="flex-start"
+          onClick={() => handleNavigation("/profile")}
+        >
+          Profile
+        </Button>
+        <Button
+          variant="subtle"
+          color="red"
+          fullWidth
+          justify="flex-start"
+          onClick={handleLogout}
+        >
+          Logout
+        </Button>
+      </AppShell.Navbar>
+
+      <AppShell.Main>
+        <Container size="xl" px="md">
+          {children}
+        </Container>
+      </AppShell.Main>
+    </AppShell>
   );
 };
 

@@ -1,35 +1,36 @@
-// src/pages/SquadGoalSubmissionPage.tsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import "@styles/global.css";
-import "@styles/SquadMembersPage.css"; // Dedicated CSS for this component
-
-interface SquadMember {
-  username: string;
-  name?: string;
-  stats?: { [key: string]: number };
-}
-
-interface Squad {
-  id: string;
-  name: string;
-  admin: string;
-  members: SquadMember[];
-  isAdmin: boolean;
-}
+import {
+  Stack,
+  Title,
+  Text,
+  Button,
+  TextInput,
+  Paper,
+  Group,
+  Badge,
+  Loader,
+  Center,
+  Alert,
+  ActionIcon,
+  Divider,
+  Box,
+  Card,
+} from "@mantine/core";
+import { IconCrown, IconTrash, IconUserMinus, IconUserPlus, IconX } from "@tabler/icons-react";
+import { squadsApi, invitesApi, ApiError, type SquadMember } from "@api";
 
 interface UserProfile {
-    username: string;
-    configured_name?: string;
+  username: string;
+  configured_name?: string;
 }
 
-// New interface for invites sent by this squad
 interface OutboundInvite {
-    id: number;
-    squad_name: string;
-    squad_id: string;
-    invited_username: string;
-    status: string;
+  id: string;
+  squad_name: string;
+  squad_id: string;
+  invited_username: string;
+  status: string;
 }
 
 interface SquadMembersPageProps {
@@ -38,92 +39,96 @@ interface SquadMembersPageProps {
 
 const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
   const navigate = useNavigate();
-  const [squad, setSquad] = useState<Squad | null>(null);
+  const apiURL = window.APP_CONFIG?.API_URL || "/api";
+
+  const [members, setMembers] = useState<SquadMember[]>([]);
+  const [squadName, setSquadName] = useState("");
+  const [adminUsername, setAdminUsername] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUsername, setCurrentUsername] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [inviteUsername, setInviteUsername] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
-  const [currentUsername, setCurrentUsername] = useState<string>("");
-  // State to store configured names
+  const [inviteError, setInviteError] = useState(false);
+
   const [userProfiles, setUserProfiles] = useState<Map<string, string>>(new Map());
-  // New state to store pending invites sent from this squad
   const [outboundInvites, setOutboundInvites] = useState<OutboundInvite[]>([]);
 
-  const apiURL = window.APP_CONFIG?.API_URL || "/api"; 
-
-  // --- UPDATED: Function to fetch configured names from the dedicated endpoint ---
+  // Fetch user profiles
   const fetchProfiles = async () => {
     try {
-        const res = await fetch(`${apiURL}/squads/${squadId}/profiles`, { 
-            credentials: "include" 
+      const res = await fetch(`${apiURL}/squads/${squadId}/profiles`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const profiles: UserProfile[] = await res.json();
+        const profileMap = new Map<string, string>();
+        profiles.forEach((p) => {
+          if (p.configured_name) {
+            profileMap.set(p.username, p.configured_name);
+          }
         });
-        if (res.ok) {
-            const profiles: { username: string, configured_name?: string }[] = await res.json();
-            const profileMap = new Map<string, string>();
-            profiles.forEach(p => {
-                if (p.configured_name) {
-                    profileMap.set(p.username, p.configured_name);
-                }
-            });
-            setUserProfiles(profileMap);
-        }
+        setUserProfiles(profileMap);
+      }
     } catch (err) {
-        console.error("Failed to fetch user profiles:", err);
+      console.error("Failed to fetch user profiles:", err);
     }
   };
-  // -----------------------------------------------------------------------------
 
-  // --- NEW: Function to fetch invites sent by this squad (Outbound Invites) ---
+  // Fetch outbound invites (for admins)
   const fetchOutboundInvites = async () => {
     try {
-        // Query the /api/invites endpoint with the squad_id parameter
-        const res = await fetch(`${apiURL}/invites?squad_id=${squadId}`, {
-            credentials: "include"
-        });
-        if (res.ok) {
-            const data: OutboundInvite[] = await res.json();
-            setOutboundInvites(data);
-        }
+      const res = await fetch(`${apiURL}/invites?squad_id=${squadId}`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data: OutboundInvite[] = await res.json();
+        setOutboundInvites(data);
+      }
     } catch (err) {
-        console.error("Failed to fetch outbound invites:", err);
+      console.error("Failed to fetch outbound invites:", err);
     }
   };
-  // -----------------------------------------------------------------------------
 
-
+  // Fetch squad data
   const fetchSquadData = async () => {
-    setLoading(true);
-    let isAdmin = false; // Local variable to track admin status immediately
     try {
-      // 1. Fetch user info
+      setLoading(true);
+      setError(null);
+
+      // Fetch current user info
       const userRes = await fetch(`${apiURL}/user_info`, { credentials: "include" });
-      let username = "";
       if (userRes.ok) {
         const userData = await userRes.json();
-        username = userData.username;
-        setCurrentUsername(username);
+        setCurrentUsername(userData.username);
       }
 
-      // 2. Fetch squad data
-      const squadRes = await fetch(`${apiURL}/squads/${squadId}`, { credentials: "include" });
-      const squadData = await squadRes.json();
-      isAdmin = squadData.is_admin; // Capture admin status
+      // Fetch squad details
+      const squad = await squadsApi.getById(squadId);
+      setSquadName(squad.name);
+      setAdminUsername(squad.admin);
+      setIsAdmin(squad.is_admin);
 
-      const members: SquadMember[] = squadData.members.map((m: any) =>
-        typeof m === "string" ? { username: m, stats: {} } : { ...m, stats: m.stats || {} }
-      );
+      // Fetch members
+      const membersData = await squadsApi.getMembers(squadId);
+      setMembers(membersData);
 
-      setSquad({ ...squadData, members, isAdmin });
-      
-      // 3. Fetch configured names
+      // Fetch profiles
       await fetchProfiles();
-      
-      // 4. Fetch outbound invites if the current user is an admin
-      if (isAdmin) {
-          await fetchOutboundInvites();
-      }
 
+      // Fetch outbound invites if admin
+      if (squad.is_admin) {
+        await fetchOutboundInvites();
+      }
     } catch (err) {
-      console.error("Failed to fetch data:", err);
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Failed to load squad data");
+      }
     } finally {
       setLoading(false);
     }
@@ -133,240 +138,286 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
     fetchSquadData();
   }, [squadId]);
 
-
+  // Handle invite
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteUsername.trim()) return;
 
     try {
-      const res = await fetch(`${apiURL}/squads/${squadId}/invite`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ username: inviteUsername.trim() }),
-      });
-      const data = await res.json();
-      
-      // Update message and clear input on success
-      setInviteMessage(data.message || (res.ok ? `Invite sent to ${inviteUsername}! ✅` : "Failed to send invite ❌"));
-      if (res.ok) {
-        setInviteUsername("");
-        // Refresh the list of outbound invites to show the new one
-        fetchOutboundInvites(); 
-      }
+      setInviteLoading(true);
+      setInviteMessage(null);
+      setInviteError(false);
+
+      await invitesApi.send(squadId, inviteUsername.trim());
+
+      setInviteMessage(`Invite sent to ${inviteUsername}!`);
+      setInviteUsername("");
+      setInviteError(false);
+
+      // Refresh outbound invites
+      await fetchOutboundInvites();
+
+      // Clear message after 3 seconds
+      setTimeout(() => setInviteMessage(null), 3000);
     } catch (err) {
-      console.error(err);
-      setInviteMessage("Failed to send invite ❌");
+      setInviteError(true);
+      if (err instanceof ApiError) {
+        setInviteMessage(err.message);
+      } else {
+        setInviteMessage("Failed to send invite");
+      }
+    } finally {
+      setInviteLoading(false);
     }
   };
-  
-  // --- Function to handle rescinding an invite ---
-  const rescindInvite = async (inviteId: number, invitedUsername: string) => {
-      if (!window.confirm(`Are you sure you want to rescind the invite sent to @${invitedUsername}?`)) return;
-  
-      try {
-          const res = await fetch(`${apiURL}/invites/${inviteId}`, {
-              method: "DELETE",
-              credentials: "include"
-          });
-          const data = await res.json();
-          alert(data.message);
-          
-          if (res.ok) {
-              // Refresh the list of outbound invites
-              fetchOutboundInvites(); 
-          }
-      } catch (err) {
-          console.error("Failed to rescind invite:", err);
-          alert("Failed to rescind invite.");
+
+  // Rescind invite
+  const rescindInvite = async (inviteId: string, invitedUsername: string) => {
+    if (!window.confirm(`Rescind invite sent to @${invitedUsername}?`)) return;
+
+    try {
+      const res = await fetch(`${apiURL}/invites/${inviteId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        await fetchOutboundInvites();
       }
+    } catch (err) {
+      console.error("Failed to rescind invite:", err);
+    }
   };
-  // ---------------------------------------------------
 
+  // Remove member
   const removeMember = async (username: string) => {
-    if (!squad || !squad.isAdmin || username === squad.admin) return;
-
+    if (username === adminUsername) return;
     if (!window.confirm(`Remove ${username} from the squad?`)) return;
 
     try {
-      const res = await fetch(`${apiURL}/squads/${squad.id}/remove_member`, {
+      const res = await fetch(`${apiURL}/squads/${squadId}/remove_member`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ username }),
       });
-      const data = await res.json();
-      alert(data.message);
-      if (res.ok) fetchSquadData(); 
+
+      if (res.ok) {
+        await fetchSquadData();
+      }
     } catch (err) {
-      console.error(err);
-      alert("Failed to remove member.");
+      console.error("Failed to remove member:", err);
     }
   };
 
+  // Leave squad
   const leaveSquad = async () => {
-    if (!squad) return;
-    if (!window.confirm(`Leave squad "${squad.name}"?`)) return;
+    if (!window.confirm(`Leave squad "${squadName}"?`)) return;
 
     try {
-      const res = await fetch(`${apiURL}/squads/${squad.id}/leave`, {
-        method: "POST",
-        credentials: "include",
-      });
-      const data = await res.json();
-      alert(data.message);
-      if (res.ok) navigate("/squads");
+      await squadsApi.leave(squadId);
+      navigate("/squads");
     } catch (err) {
-      console.error(err);
-      alert("Failed to leave squad.");
+      console.error("Failed to leave squad:", err);
     }
   };
 
+  // Delete squad
   const deleteSquad = async () => {
-    if (!squad || !squad.isAdmin) return;
-    if (!window.confirm(`Delete squad "${squad.name}" permanently? This action cannot be undone.`)) return;
+    if (!window.confirm(`Delete squad "${squadName}" permanently? This action cannot be undone.`)) return;
 
     try {
-      const res = await fetch(`${apiURL}/squads/${squad.id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const data = await res.json();
-      alert(data.message);
-      if (res.ok) navigate("/squads");
+      await squadsApi.delete(squadId);
+      navigate("/squads");
     } catch (err) {
-      console.error(err);
-      alert("Failed to delete squad.");
+      console.error("Failed to delete squad:", err);
     }
   };
 
-  if (loading) return <p>Loading squad...</p>;
-  if (!squad) return <p>Squad not found.</p>;
+  // Loading state
+  if (loading) {
+    return (
+      <Center style={{ minHeight: "200px" }}>
+        <Loader size="lg" />
+      </Center>
+    );
+  }
 
-  // Filter messages for standardized display
-  const isSuccess = inviteMessage && inviteMessage.includes("✅");
+  // Error state
+  if (error) {
+    return <Alert color="red" title="Error">{error}</Alert>;
+  }
 
-  // --- NEW LOGIC: Sort members to put the admin at the top ---
-  const sortedMembers = [...squad.members].sort((a, b) => {
-    // If 'a' is the admin, it should come first (return -1)
-    if (a.username === squad.admin) return -1;
-    // If 'b' is the admin, it should come first (return 1)
-    if (b.username === squad.admin) return 1;
-    // Otherwise, maintain existing order or use a secondary sort (e.g., by username)
+  // Sort members - admin first
+  const sortedMembers = [...members].sort((a, b) => {
+    if (a.username === adminUsername) return -1;
+    if (b.username === adminUsername) return 1;
     return a.username.localeCompare(b.username);
   });
-  // -------------------------------------------------------------
-  
+
   return (
-    <div className="glass-card squad-members-card">
-      <h2 className="card-title">Squad Members</h2>
-      
-      {/* Member List */}
-      {squad.members.length === 0 ? (
-        <p>No members yet.</p>
-      ) : (
-        <ul className="member-list">
-          {sortedMembers.map((member) => { // Use sortedMembers here
-            const isCurrentUser = member.username === currentUsername;
-            const isAdmin = member.username === squad.admin;
-            
-            // Priority: 1. Configured name (from userProfiles), 2. Default name (from squad data), 3. Username
-            const configuredName = userProfiles.get(member.username);
-            const displayName = configuredName || member.name || member.username;
+    <Stack gap="md">
+      <Paper shadow="sm" p="lg" withBorder>
+        <Stack gap="lg">
+          <Title order={3}>Squad Members</Title>
 
-            return (
-              <li key={member.username} className="member-list-item">
-                <div className="member-info">
-                  <strong className={isAdmin ? "admin-name" : ""}>
-                    {isAdmin && "👑 "}
-                    {displayName}
-                    {isCurrentUser && " (You)"}
-                  </strong>
-                  <span className="member-username">@{member.username}</span>
-                </div>
-
-                <div className="member-actions">
-                  {squad.isAdmin && !isAdmin && (
-                    <button className="submit-btn danger-btn remove-btn" onClick={() => removeMember(member.username)}>
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      
-      {/* Invite & Admin Section */}
-      {squad.isAdmin && (
-        <div className="invite-section">
-          {/* Invite Form */}
-          <h3 className="card-subtitle">Invite a Member</h3>
-          <form onSubmit={handleInvite} className="form-inline">
-            <input
-              type="text"
-              placeholder="Enter username"
-              value={inviteUsername}
-              onChange={(e) => setInviteUsername(e.target.value)}
-              className="input invite-input"
-              required
-            />
-            <button type="submit" className="submit-btn success-btn invite-btn">
-              Invite
-            </button>
-          </form>
-          {inviteMessage && (
-            <p className={`message ${isSuccess ? "success-message" : "error-message"}`}>
-              {inviteMessage}
-            </p>
-          )}
-
-          {/* Pending Outbound Invites Section */}
-          <h3 className="card-subtitle pending-invites-title">Pending Invites ({outboundInvites.length})</h3>
-          
-          {outboundInvites.length === 0 ? (
-            <p className="muted-text">No pending invites from your squad.</p>
+          {/* Members List */}
+          {members.length === 0 ? (
+            <Text c="dimmed">No members yet.</Text>
           ) : (
-            <ul className="member-list pending-invite-list">
-              {outboundInvites.map(invite => (
-                <li key={invite.id} className="member-list-item pending-invite-item">
-                  <div className="member-info">
-                    <strong className="invited-name">@{invite.invited_username}</strong>
-                    <span className="member-username invite-status">Pending</span>
-                  </div>
-                  <div className="member-actions">
-                    <button 
-                      className="submit-btn danger-btn rescind-btn"
-                      onClick={() => rescindInvite(invite.id, invite.invited_username)}
-                    >
-                      Rescind
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <Stack gap="xs">
+              {sortedMembers.map((member) => {
+                const isCurrentUser = member.username === currentUsername;
+                const isMemberAdmin = member.username === adminUsername;
+                const configuredName = userProfiles.get(member.username);
+                const displayName = configuredName || member.username;
+
+                return (
+                  <Card key={member.username} padding="sm" withBorder>
+                    <Group justify="space-between" align="center">
+                      <Group gap="sm">
+                        {isMemberAdmin && <IconCrown size={20} color="gold" />}
+                        <Box>
+                          <Text fw={500}>
+                            {displayName}
+                            {isCurrentUser && " (You)"}
+                          </Text>
+                          <Text size="sm" c="dimmed">
+                            @{member.username}
+                          </Text>
+                        </Box>
+                        {isMemberAdmin && (
+                          <Badge color="blue" variant="light">
+                            Admin
+                          </Badge>
+                        )}
+                      </Group>
+
+                      {isAdmin && !isMemberAdmin && (
+                        <ActionIcon
+                          color="red"
+                          variant="subtle"
+                          onClick={() => removeMember(member.username)}
+                          title="Remove member"
+                        >
+                          <IconUserMinus size={18} />
+                        </ActionIcon>
+                      )}
+                    </Group>
+                  </Card>
+                );
+              })}
+            </Stack>
           )}
+        </Stack>
+      </Paper>
 
+      {/* Admin Section */}
+      {isAdmin && (
+        <>
+          {/* Invite Form */}
+          <Paper shadow="sm" p="lg" withBorder>
+            <Stack gap="md">
+              <Title order={4}>Invite a Member</Title>
 
-          {/* Admin Actions: Delete Squad */}
-          <div className="action-group admin-actions">
-            <button className="submit-btn danger-btn delete-btn" onClick={deleteSquad}>
+              <form onSubmit={handleInvite}>
+                <Stack gap="sm">
+                  <TextInput
+                    placeholder="Enter username"
+                    value={inviteUsername}
+                    onChange={(e) => setInviteUsername(e.target.value)}
+                    required
+                    disabled={inviteLoading}
+                    leftSection={<IconUserPlus size={16} />}
+                  />
+                  <Button type="submit" loading={inviteLoading} fullWidth>
+                    Send Invite
+                  </Button>
+                </Stack>
+              </form>
+
+              {inviteMessage && (
+                <Alert color={inviteError ? "red" : "green"} withCloseButton onClose={() => setInviteMessage(null)}>
+                  {inviteMessage}
+                </Alert>
+              )}
+            </Stack>
+          </Paper>
+
+          {/* Pending Invites */}
+          <Paper shadow="sm" p="lg" withBorder>
+            <Stack gap="md">
+              <Group justify="space-between">
+                <Title order={4}>Pending Invites</Title>
+                <Badge>{outboundInvites.length}</Badge>
+              </Group>
+
+              {outboundInvites.length === 0 ? (
+                <Text c="dimmed" size="sm">
+                  No pending invites
+                </Text>
+              ) : (
+                <Stack gap="xs">
+                  {outboundInvites.map((invite) => (
+                    <Card key={invite.id} padding="sm" withBorder>
+                      <Group justify="space-between" align="center">
+                        <Box>
+                          <Text fw={500}>@{invite.invited_username}</Text>
+                          <Badge size="sm" color="yellow" variant="light">
+                            Pending
+                          </Badge>
+                        </Box>
+
+                        <ActionIcon
+                          color="red"
+                          variant="subtle"
+                          onClick={() => rescindInvite(invite.id, invite.invited_username)}
+                          title="Rescind invite"
+                        >
+                          <IconX size={18} />
+                        </ActionIcon>
+                      </Group>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+            </Stack>
+          </Paper>
+
+          {/* Admin Actions */}
+          <Paper shadow="sm" p="lg" withBorder>
+            <Stack gap="md">
+              <Title order={4}>Danger Zone</Title>
+              <Button
+                color="red"
+                variant="light"
+                fullWidth
+                leftSection={<IconTrash size={16} />}
+                onClick={deleteSquad}
+              >
                 Delete Squad
-            </button>
-          </div>
-        </div>
+              </Button>
+            </Stack>
+          </Paper>
+        </>
       )}
 
-      {/* Non-Admin Action: Leave Squad */}
-      {!squad.isAdmin && squad.members.some(m => m.username === currentUsername) && (
-        <div className="action-group non-admin-actions">
-            <button className="submit-btn danger-btn leave-btn" onClick={leaveSquad}>
-                Leave Squad
-            </button>
-        </div>
+      {/* Non-Admin Actions */}
+      {!isAdmin && (
+        <Paper shadow="sm" p="lg" withBorder>
+          <Button
+            color="red"
+            variant="light"
+            fullWidth
+            leftSection={<IconUserMinus size={16} />}
+            onClick={leaveSquad}
+          >
+            Leave Squad
+          </Button>
+        </Paper>
       )}
-    </div>
+    </Stack>
   );
 };
 

@@ -1,29 +1,29 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@components/AppLayout";
-import "@styles/global.css";
-import "@styles/ProfilePage.css";
-
-interface Profile {
-  name?: string;
-  gender?: string;
-  age?: number;
-  height_cm?: number;
-  weight_kg?: number;
-  goal_weight_kg?: number;
-}
-
-interface SaveResponse {
-  message: string;
-  calorie_goal?: number;
-  protein_goal?: number;
-}
+import {
+  Container,
+  Paper,
+  TextInput,
+  Select,
+  NumberInput,
+  Button,
+  Stack,
+  Alert,
+  Loader,
+  Center,
+  Title,
+  Text,
+  Group,
+} from "@mantine/core";
+import { authApi, UserProfile, ProfileSaveResponse, ApiError } from "@api";
 
 const ProfilePage: React.FC = () => {
-  const apiURL = window.APP_CONFIG.API_URL;
   const navigate = useNavigate();
 
-  const [profile, setProfile] = useState<Profile>({});
+  const [profile, setProfile] = useState<UserProfile>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [messageType, setMessageType] = useState<"success" | "error" | null>(null);
   const [calorieGoal, setCalorieGoal] = useState<number | null>(null);
@@ -33,124 +33,173 @@ const ProfilePage: React.FC = () => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch(`${apiURL}/profile`, { credentials: "include" });
-        if (res.status === 401) return navigate("/login");
-        if (!res.ok) throw new Error("Failed to fetch profile");
-        const data: Profile = await res.json();
+        setLoading(true);
+        const data = await authApi.getProfile();
         setProfile(data);
       } catch (err) {
-        console.error("Error fetching profile:", err);
+        if (err instanceof ApiError) {
+          if (err.status === 401) {
+            navigate("/login");
+            return;
+          }
+          console.error("Error fetching profile:", err);
+        }
+      } finally {
+        setLoading(false);
       }
     };
     fetchProfile();
-  }, [apiURL, navigate]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setProfile((prev) => ({ ...prev, [name]: value }));
-  };
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const res = await fetch(`${apiURL}/profile`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(profile),
-      });
-      const result: SaveResponse = await res.json();
 
-      if (res.ok) {
-        setMessage(result.message || "Profile saved successfully!");
-        setMessageType("success");
-        setCalorieGoal(result.calorie_goal || null);
-        setProteinGoal(result.protein_goal || null);
-      } else {
-        setMessage(result.message || "Failed to save profile.");
-        setMessageType("error");
-        setCalorieGoal(null);
-        setProteinGoal(null);
-      }
+    try {
+      setSaving(true);
+      const result = await authApi.updateProfile(profile);
+
+      setMessage(result.message || "Profile saved successfully!");
+      setMessageType("success");
+      setCalorieGoal(result.calorie_goal || null);
+      setProteinGoal(result.protein_goal || null);
+
+      // Clear message after 5 seconds
+      setTimeout(() => setMessage(null), 5000);
     } catch (err) {
       console.error("Error saving profile:", err);
-      setMessage("Unable to reach server. Please try again later.");
+
+      if (err instanceof ApiError) {
+        setMessage(err.message || "Failed to save profile.");
+      } else {
+        setMessage("Unable to reach server. Please try again later.");
+      }
+
       setMessageType("error");
       setCalorieGoal(null);
       setProteinGoal(null);
-    } finally {
+
+      // Clear message after 5 seconds
       setTimeout(() => setMessage(null), 5000);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const logout = () => {
-    document.cookie = "session=; Max-Age=0; path=/;";
-    navigate("/login");
-  };
-
-  const fields = [
-    { label: "Name", name: "name", type: "text", placeholder: "Enter your name" },
-    { label: "Age", name: "age", type: "number", placeholder: "Enter your age" },
-    { label: "Height (cm)", name: "height_cm", type: "number", placeholder: "Enter your height" },
-    { label: "Weight (kg)", name: "weight_kg", type: "number", placeholder: "Enter your weight" },
-    { label: "Goal Weight (kg)", name: "goal_weight_kg", type: "number", placeholder: "Enter your goal weight" },
-  ];
+  if (loading) {
+    return (
+      <AppLayout title="Profile">
+        <Center style={{ minHeight: '200px' }}>
+          <Loader size="lg" />
+        </Center>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout title="Profile">
-      <div className="container profile-page">
-        <div className="glass-card profile-card">
+      <Container size="sm">
+        <Paper shadow="md" p="xl" withBorder>
+          <Stack gap="lg">
+            <Title order={2}>Your Profile</Title>
 
-          {message && (
-            <div className={`message-container ${messageType}`} role="alert">
-              {message}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="profile-form">
-            {fields.map((field) => (
-              <div key={field.name} className="form-group">
-                <label htmlFor={field.name}>{field.label}</label>
-                <input
-                  id={field.name}
-                  name={field.name}
-                  type={field.type}
-                  value={profile[field.name as keyof Profile] || ""}
-                  onChange={handleChange}
-                  placeholder={field.placeholder}
-                />
-              </div>
-            ))}
-
-            <div className="form-group">
-              <label htmlFor="gender">Gender</label>
-              <select
-                id="gender"
-                name="gender"
-                value={profile.gender || ""}
-                onChange={handleChange}
-                aria-label="Gender"
+            {message && (
+              <Alert
+                color={messageType === "success" ? "green" : "red"}
+                title={messageType === "success" ? "Success" : "Error"}
+                withCloseButton
+                onClose={() => setMessage(null)}
               >
-                <option value="">Select...</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-              </select>
-            </div>
+                {message}
+              </Alert>
+            )}
 
-            <button type="submit" className="save-button">
-              Save Profile
-            </button>
-          </form>
+            <form onSubmit={handleSubmit}>
+              <Stack gap="md">
+                <TextInput
+                  label="Name"
+                  placeholder="Enter your name"
+                  value={profile.name || ""}
+                  onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                />
 
-          {(calorieGoal || proteinGoal) && (
-            <div className="goals-display">
-              <h3>Your Goals</h3>
-              {calorieGoal && <p>Daily Calorie Goal: {calorieGoal} kcal</p>}
-              {proteinGoal && <p>Daily Protein Goal: {proteinGoal} g</p>}
-            </div>
-          )}
-        </div>
-      </div>
+                <NumberInput
+                  label="Age"
+                  placeholder="Enter your age"
+                  value={profile.age || ""}
+                  onChange={(value) => setProfile({ ...profile, age: Number(value) || undefined })}
+                  min={0}
+                  max={150}
+                />
+
+                <NumberInput
+                  label="Height (cm)"
+                  placeholder="Enter your height"
+                  value={profile.height_cm || ""}
+                  onChange={(value) => setProfile({ ...profile, height_cm: Number(value) || undefined })}
+                  min={0}
+                  max={300}
+                />
+
+                <NumberInput
+                  label="Weight (kg)"
+                  placeholder="Enter your weight"
+                  value={profile.weight_kg || ""}
+                  onChange={(value) => setProfile({ ...profile, weight_kg: Number(value) || undefined })}
+                  min={0}
+                  max={500}
+                  decimalScale={1}
+                />
+
+                <NumberInput
+                  label="Goal Weight (kg)"
+                  placeholder="Enter your goal weight"
+                  value={profile.goal_weight_kg || ""}
+                  onChange={(value) => setProfile({ ...profile, goal_weight_kg: Number(value) || undefined })}
+                  min={0}
+                  max={500}
+                  decimalScale={1}
+                />
+
+                <Select
+                  label="Gender"
+                  placeholder="Select gender"
+                  value={profile.gender || ""}
+                  onChange={(value) => setProfile({ ...profile, gender: value || undefined })}
+                  data={[
+                    { value: "male", label: "Male" },
+                    { value: "female", label: "Female" },
+                  ]}
+                  clearable
+                />
+
+                <Button type="submit" loading={saving} fullWidth mt="md">
+                  Save Profile
+                </Button>
+              </Stack>
+            </form>
+
+            {(calorieGoal || proteinGoal) && (
+              <Paper bg="blue.0" p="md" mt="md" withBorder>
+                <Stack gap="xs">
+                  <Title order={4}>Your Goals</Title>
+                  {calorieGoal && (
+                    <Group gap="xs">
+                      <Text fw={500}>Daily Calorie Goal:</Text>
+                      <Text>{calorieGoal} kcal</Text>
+                    </Group>
+                  )}
+                  {proteinGoal && (
+                    <Group gap="xs">
+                      <Text fw={500}>Daily Protein Goal:</Text>
+                      <Text>{proteinGoal} g</Text>
+                    </Group>
+                  )}
+                </Stack>
+              </Paper>
+            )}
+          </Stack>
+        </Paper>
+      </Container>
     </AppLayout>
   );
 };

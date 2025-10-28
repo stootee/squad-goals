@@ -8,7 +8,7 @@ This module contains Flask route decorators for:
 
 from functools import wraps
 from typing import Callable, Any
-from flask import jsonify, Response
+from flask import jsonify
 from flask_login import current_user
 from models import Squad
 

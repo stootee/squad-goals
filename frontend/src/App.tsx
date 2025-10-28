@@ -6,6 +6,7 @@ import SquadsPage from "@pages/SquadsPage";
 import HomePage from "@pages/HomePage";
 import SquadLayout from "@pages/SquadLayout";
 import SquadDailyOverviewPage from "@pages/SquadGoalsOverviewPage";
+import ErrorBoundary from "@components/ErrorBoundary";
 
 const SquadLayoutWrapper: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -16,14 +17,16 @@ const SquadLayoutWrapper: React.FC = () => {
 };
 
 const App: React.FC = () => (
-  <Routes>
-    <Route path="/" element={<HomePage />} />
-    <Route path="/profile" element={<ProfilePage />} />
-    <Route path="/squads" element={<SquadsPage />} />
-    <Route path="/squads/:id/daily" element={<SquadDailyOverviewPage squadId={useParams().id!} />} />
-    <Route path="/squads/:id/*" element={<SquadLayoutWrapper />} />
-    <Route path="*" element={<HomePage />} />
-  </Routes>
+  <ErrorBoundary>
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/profile" element={<ProfilePage />} />
+      <Route path="/squads" element={<SquadsPage />} />
+      <Route path="/squads/:id/daily" element={<SquadDailyOverviewPage squadId={useParams().id!} />} />
+      <Route path="/squads/:id/*" element={<SquadLayoutWrapper />} />
+      <Route path="*" element={<HomePage />} />
+    </Routes>
+  </ErrorBoundary>
 );
 
 export default App;

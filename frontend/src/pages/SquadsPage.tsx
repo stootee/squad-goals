@@ -1,52 +1,62 @@
-// src/components/SquadsPage.tsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@components/AppLayout";
-import "@styles/global.css";
-
-interface Squad {
-  id: string;
-  name: string;
-  admin: string;
-  is_admin: boolean;
-  members: number;
-}
-
-interface Invite {
-  id: string;
-  squad: string;
-  invited_by: string;
-  status: "pending" | "accepted" | "declined";
-}
+import {
+  Container,
+  Loader,
+  Center,
+  Text,
+  Alert,
+  Button,
+  TextInput,
+  Card,
+  Grid,
+  Title,
+  Group,
+  Badge,
+  Stack,
+  Collapse,
+  Paper,
+} from "@mantine/core";
+import { squadsApi, invitesApi, Squad, Invite, ApiError } from "@api";
 
 const SquadsPage: React.FC = () => {
-  // Use optional chaining for safer access to window.APP_CONFIG
-  const apiURL = window.APP_CONFIG?.API_URL || "/api";
   const navigate = useNavigate();
 
   const [squads, setSquads] = useState<Squad[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [newSquadName, setNewSquadName] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [createLoading, setCreateLoading] = useState(false);
 
   // Load squads and invites
   const loadInvites = async () => {
     try {
-      const res = await fetch(`${apiURL}/invites`, { credentials: "include" });
-      const data = await res.json();
-      setInvites(Array.isArray(data) ? data : []);
+      const data = await invitesApi.getAll();
+      setInvites(data);
     } catch (err) {
-      console.error(err);
+      if (err instanceof ApiError && err.status !== 401) {
+        console.error("Error loading invites:", err);
+      }
     }
   };
 
   const loadSquads = async () => {
     try {
-      const res = await fetch(`${apiURL}/squads`, { credentials: "include" });
-      const data = await res.json();
-      setSquads(Array.isArray(data) ? data : []);
+      setLoading(true);
+      setError(null);
+
+      const data = await squadsApi.getAll();
+      setSquads(data);
     } catch (err) {
-      console.error(err);
+      if (err instanceof ApiError && err.status !== 401) {
+        console.error("Error loading squads:", err);
+        setError(err.message);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -56,48 +66,34 @@ const SquadsPage: React.FC = () => {
     if (!newSquadName.trim()) return;
 
     try {
-      const res = await fetch(`${apiURL}/squads`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: newSquadName }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) console.error(data.message);
-      
-      if (res.ok) {
-        setNewSquadName("");
-        loadSquads();
-      }
+      setCreateLoading(true);
+      await squadsApi.create(newSquadName);
+      setNewSquadName("");
+      setMenuOpen(false);
+      await loadSquads();
     } catch (err) {
-      console.error(err);
+      console.error("Error creating squad:", err);
+      if (err instanceof ApiError) {
+        setError(err.message);
+      }
+    } finally {
+      setCreateLoading(false);
     }
   };
 
   // Respond to squad invite
   const respondInvite = async (inviteId: string, response: "accept" | "decline") => {
     try {
-      const res = await fetch(`${apiURL}/invites/${inviteId}/respond`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ response }),
-      });
-
-      // Using console.error for non-breaking error reports
-      if (!res.ok) {
-        const data = await res.json();
-        console.error(data.message || "Failed to respond");
-        return;
-      }
-
-      if (res.ok) {
-        setInvites((prev) => prev.filter((i) => i.id !== inviteId));
-        if (response === "accept") loadSquads();
+      await invitesApi.respond(inviteId, response);
+      setInvites((prev) => prev.filter((i) => i.id !== inviteId));
+      if (response === "accept") {
+        await loadSquads();
       }
     } catch (err) {
-      console.error(err);
+      console.error("Error responding to invite:", err);
+      if (err instanceof ApiError) {
+        setError(err.message);
+      }
     }
   };
 
@@ -108,96 +104,152 @@ const SquadsPage: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Show loading state
+  if (loading) {
+    return (
+      <AppLayout title="Squads">
+        <Center style={{ minHeight: '200px' }}>
+          <Loader size="lg" />
+        </Center>
+      </AppLayout>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <AppLayout title="Squads">
+        <Alert color="red" title="Error Loading Squads" withCloseButton onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout title="Squads">
-      {/* Create New Squad Dialog */}
-      <div style={{ marginBottom: "1em" }}>
-        <button
-          onClick={() => setMenuOpen((prev) => !prev)}
-          className="submit-btn"
-          style={{ marginBottom: "0.5em" }}
-        >
-          {menuOpen ? "Cancel" : "Create New Squad"}
-        </button>
+      <Container size="xl" px={0}>
+        <Stack gap="md">
+          {/* Create New Squad Section */}
+          <Paper shadow="xs" p="md" withBorder>
+            <Button
+              onClick={() => setMenuOpen((prev) => !prev)}
+              variant={menuOpen ? "light" : "filled"}
+              fullWidth
+            >
+              {menuOpen ? "Cancel" : "Create New Squad"}
+            </Button>
 
-        {menuOpen && (
-          <form onSubmit={createSquad} className="form-inline" style={{ display: 'flex', gap: '10px' }}>
-            <input
-              type="text"
-              placeholder="Squad name"
-              value={newSquadName}
-              onChange={(e) => setNewSquadName(e.target.value)}
-              required
-              style={{ flexGrow: 1, maxWidth: '300px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} 
-            />
-            <button type="submit" className="submit-btn" style={{ padding: '8px 16px', borderRadius: '4px', border: 'none', cursor: 'pointer', backgroundColor: '#3f51b5', color: 'white' }}>
-              Create
-            </button>
-          </form>
-        )}
-      </div>
+            <Collapse in={menuOpen}>
+              <form onSubmit={createSquad}>
+                <Stack gap="sm" mt="md">
+                  <TextInput
+                    placeholder="Squad name"
+                    value={newSquadName}
+                    onChange={(e) => setNewSquadName(e.target.value)}
+                    required
+                    disabled={createLoading}
+                  />
+                  <Button type="submit" loading={createLoading}>
+                    Create Squad
+                  </Button>
+                </Stack>
+              </form>
+            </Collapse>
+          </Paper>
 
-      {/* Content Grid */}
-      <div className="container grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-        {/* Pending Invites */}
-        {invites.map((invite) => (
-          <div key={invite.id} className="glass-card" style={{ padding: '15px', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-            <h3 style={{ margin: '0 0 5px 0', fontSize: '1.2em' }}>{invite.squad}</h3>
-            <span style={{ fontSize: '0.9em', color: '#666' }}>Invited by {invite.invited_by}</span>
-            {invite.status === "pending" && (
-              // FIX: Ensures equal size (flex: 1) and color-coding (red/green) for buttons
-              <div 
-                className="form-inline" 
-                style={{ 
-                  marginTop: "15px", 
-                  display: 'flex', 
-                  gap: '10px' // Space between buttons
-                }}
-              >
-                <button
-                  onClick={() => respondInvite(invite.id, "accept")}
-                  className="success-btn"
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={() => respondInvite(invite.id, "decline")}
-                  className="danger-btn"
-                >
-                  Decline
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
+          {/* Empty state */}
+          {squads.length === 0 && invites.length === 0 && (
+            <Center style={{ minHeight: '200px' }}>
+              <Stack align="center" gap="sm">
+                <Text c="dimmed" size="lg">
+                  No squads yet
+                </Text>
+                <Text c="dimmed" size="sm">
+                  Create your first squad to get started!
+                </Text>
+              </Stack>
+            </Center>
+          )}
 
-        {/* Squads */}
-        {squads.map((squad) => (
-          <div
-            key={squad.id}
-            className="glass-card"
-            onClick={() => navigate(`/squads/${squad.id}/submit`)}
-            style={{ 
-              padding: '15px', 
-              borderRadius: '8px', 
-              border: '1px solid #3f51b5', 
-              cursor: 'pointer',
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-              transition: 'transform 0.2s'
-            }}
-          >
-            <h3 style={{ margin: '0 0 5px 0', fontSize: '1.2em', color: '#3f51b5' }}>{squad.name}</h3>
-            <span className="text-break" style={{ display: 'block', margin: '5px 0' }}>
-              <b>Admin:</b> {squad.admin}
-            </span>
-            <span className="text-break" style={{ display: 'block' }}>
-              <b>Members:</b> {squad.members ?? 1}
-            </span>
-          </div>
-        ))}
-      </div>
+          {/* Content Grid */}
+          {(squads.length > 0 || invites.length > 0) && (
+            <Grid gutter="md">
+              {/* Pending Invites */}
+              {invites.map((invite) => (
+                <Grid.Col key={invite.id} span={{ base: 12, sm: 6, md: 4 }}>
+                  <Card shadow="sm" padding="lg" withBorder>
+                    <Stack gap="sm">
+                      <Group justify="space-between">
+                        <Title order={4}>{invite.squad}</Title>
+                        <Badge color="yellow" variant="light">
+                          Invite
+                        </Badge>
+                      </Group>
+
+                      <Text size="sm" c="dimmed">
+                        Invited by {invite.invited_by}
+                      </Text>
+
+                      {invite.status === "pending" && (
+                        <Group grow>
+                          <Button
+                            color="green"
+                            variant="light"
+                            onClick={() => respondInvite(invite.id, "accept")}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            color="red"
+                            variant="light"
+                            onClick={() => respondInvite(invite.id, "decline")}
+                          >
+                            Decline
+                          </Button>
+                        </Group>
+                      )}
+                    </Stack>
+                  </Card>
+                </Grid.Col>
+              ))}
+
+              {/* Squads */}
+              {squads.map((squad) => (
+                <Grid.Col key={squad.id} span={{ base: 12, sm: 6, md: 4 }}>
+                  <Card
+                    shadow="sm"
+                    padding="lg"
+                    withBorder
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/squads/${squad.id}/submit`)}
+                  >
+                    <Stack gap="sm">
+                      <Group justify="space-between">
+                        <Title order={4}>{squad.name}</Title>
+                        {squad.is_admin && (
+                          <Badge color="blue" variant="filled">
+                            Admin
+                          </Badge>
+                        )}
+                      </Group>
+
+                      <Text size="sm">
+                        <strong>Admin:</strong> {squad.admin}
+                      </Text>
+
+                      <Text size="sm">
+                        <strong>Members:</strong> {squad.members ?? 1}
+                      </Text>
+                    </Stack>
+                  </Card>
+                </Grid.Col>
+              ))}
+            </Grid>
+          )}
+        </Stack>
+      </Container>
     </AppLayout>
-
   );
 };
 
