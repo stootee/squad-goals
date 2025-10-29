@@ -32,6 +32,7 @@ interface GoalGroupData {
   boundaries: GoalBoundaries;
   goal_id: string;
   goal_name: string;
+  goal_type: string;
   partition_type: string;
   start_value: string;
   target?: string;
@@ -240,13 +241,27 @@ const SquadGoalsHistoryPage: React.FC<SquadGoalsHistoryPageProps> = ({ squadId }
           tooltip += `\nNote: ${note}`;
         }
 
+        let displayContent: React.ReactNode;
+        let displayColor = color;
+
+        if (goalData.goal_type === 'count' && value !== null && value.trim() !== "") {
+          // If goal is 'count' and has a value, display the value
+          displayContent = value;
+          // Use a dark color for the number itself
+          displayColor = 'grey'; 
+        } else {
+          // Otherwise, display the status icon (✅/❌/—)
+          displayContent = content;
+        }
+
         return (
           <Table.Td key={key} style={{ textAlign: "center" }} title={tooltip}>
-            <Text c={color} size="lg">
-              {content}
+            <Text c={displayColor} size="lg" fw={500}> 
+              {displayContent}
             </Text>
           </Table.Td>
         );
+        // --- END MODIFIED LOGIC ---
       })}
     </Table.Tr>
   ));

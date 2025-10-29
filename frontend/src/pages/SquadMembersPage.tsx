@@ -1,3 +1,4 @@
+// src/pages/SquadMembersPage.tsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -13,12 +14,21 @@ import {
   Center,
   Alert,
   ActionIcon,
-  Divider,
   Box,
   Card,
 } from "@mantine/core";
 import { IconCrown, IconTrash, IconUserMinus, IconUserPlus, IconX } from "@tabler/icons-react";
 import { squadsApi, invitesApi, ApiError, type SquadMember } from "@api";
+
+// ====================================================
+// Constants
+// ====================================================
+
+const REFRESH_INTERVAL_MS = 30000; 
+
+// ====================================================
+// Interfaces
+// ====================================================
 
 interface UserProfile {
   username: string;
@@ -37,6 +47,10 @@ interface SquadMembersPageProps {
   squadId: string;
 }
 
+// ====================================================
+// Component Start
+// ====================================================
+
 const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
   const navigate = useNavigate();
   const apiURL = window.APP_CONFIG?.API_URL || "/api";
@@ -46,7 +60,13 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
   const [adminUsername, setAdminUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUsername, setCurrentUsername] = useState("");
+  
+  // PRIMARY LOADING STATE (for initial mount)
   const [loading, setLoading] = useState(true);
+  
+  // SECONDARY LOADING STATE (for smooth periodic refresh)
+  const [isRefreshing, setIsRefreshing] = useState(false); 
+  
   const [error, setError] = useState<string | null>(null);
 
   const [inviteUsername, setInviteUsername] = useState("");
@@ -57,10 +77,10 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
   const [userProfiles, setUserProfiles] = useState<Map<string, string>>(new Map());
   const [outboundInvites, setOutboundInvites] = useState<OutboundInvite[]>([]);
 
-  // Fetch user profiles
+  // Fetch user profiles (Original logic restored as requested)
   const fetchProfiles = async () => {
     try {
-      const res = await fetch(`${apiURL}/squads/${squadId}/profiles`, {
+      const res = await fetch(`${apiURL}/squads/${squadId}/members`, {
         credentials: "include",
       });
       if (res.ok) {
@@ -93,11 +113,16 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
     }
   };
 
-  // Fetch squad data
-  const fetchSquadData = async () => {
+  // Fetch squad data (Modified to accept isInitialLoad flag)
+  const fetchSquadData = React.useCallback(async (isInitialLoad: boolean) => {
     try {
-      setLoading(true);
       setError(null);
+      
+      if (isInitialLoad) {
+        setLoading(true); // Show full page loader
+      } else {
+        setIsRefreshing(true); // Show small spinner indicator
+      }
 
       // Fetch current user info
       const userRes = await fetch(`${apiURL}/user_info`, { credentials: "include" });
@@ -130,13 +155,32 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
         setError("Failed to load squad data");
       }
     } finally {
-      setLoading(false);
+      if (isInitialLoad) {
+        setLoading(false); // Hide full page loader
+      } else {
+        setIsRefreshing(false); // Hide small spinner indicator
+      }
     }
-  };
+  }, [squadId, apiURL]); // Dependencies added for useCallback stability
 
+  // 1. Initial Data Fetch (on mount/squadId change)
   useEffect(() => {
-    fetchSquadData();
-  }, [squadId]);
+    fetchSquadData(true); // Pass TRUE for initial load
+  }, [fetchSquadData]);
+
+  // 2. Automatic Data Refresh 🔄
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      // Only refresh if the component isn't fully loading or already refreshing
+      if (!loading && !isRefreshing) { 
+        fetchSquadData(false); // Pass FALSE for background refresh
+      }
+    }, REFRESH_INTERVAL_MS);
+
+    // Cleanup function to clear the interval when the component unmounts
+    return () => clearInterval(intervalId);
+
+  }, [squadId, loading, isRefreshing, fetchSquadData]); 
 
   // Handle invite
   const handleInvite = async (e: React.FormEvent) => {
@@ -154,8 +198,8 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
       setInviteUsername("");
       setInviteError(false);
 
-      // Refresh outbound invites
-      await fetchOutboundInvites();
+      // Refresh data immediately after a successful invite
+      await fetchSquadData(false); // Pass false for a background refresh
 
       // Clear message after 3 seconds
       setTimeout(() => setInviteMessage(null), 3000);
@@ -180,10 +224,10 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
         method: "DELETE",
         credentials: "include",
       });
-      const data = await res.json();
 
       if (res.ok) {
-        await fetchOutboundInvites();
+        // Refresh data immediately after a rescind
+        await fetchSquadData(false); // Pass false for a background refresh
       }
     } catch (err) {
       console.error("Failed to rescind invite:", err);
@@ -204,7 +248,7 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
       });
 
       if (res.ok) {
-        await fetchSquadData();
+        await fetchSquadData(false); // Pass false for a background refresh
       }
     } catch (err) {
       console.error("Failed to remove member:", err);
@@ -235,7 +279,7 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
     }
   };
 
-  // Loading state
+  // Loading state (Only for initial page load)
   if (loading) {
     return (
       <Center style={{ minHeight: "200px" }}>
@@ -260,7 +304,11 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
     <Stack gap="md" maw={800} style={{ margin: '0 auto' }}>
       <Paper shadow="sm" p="lg" withBorder>
         <Stack gap="lg">
-          <Title order={3}>Squad Members</Title>
+          {/* Title Row with subtle loading spinner */}
+          <Group gap="sm" align="center">
+            <Title order={3}>Squad Members</Title>
+            {isRefreshing && <Loader size="sm" />} 
+          </Group>
 
           {/* Members List */}
           {members.length === 0 ? (
@@ -277,7 +325,6 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
                   <Card key={member.username} padding="sm" withBorder>
                     <Group justify="space-between" align="center">
                       <Group gap="sm">
-                        {isMemberAdmin && <IconCrown size={20} color="gold" />}
                         <Box>
                           <Text fw={500}>
                             {displayName}
