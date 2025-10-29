@@ -1,34 +1,13 @@
-// src/pages/SquadGoalEntryPage.tsx
-import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-// Import Mantine Components
-import { Box, Stack, Group, Title, Text, Button, Paper, Checkbox, useMantineTheme } from "@mantine/core";
-
-// ⬇️ IMPORT THE EXTERNAL COMPONENT AND ITS TYPES ⬇️
-import BoundaryNavigator, { PartitionContext } from "../components/BoundaryNavigator"; 
-
-// The style imports below caused compilation errors due to unresolved path aliases. 
-// They have been removed to allow the application to run.
-import "@styles/global.css"; 
-import "@styles/SquadGoalEntryPage.css"; 
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { Stack, Title, Text, Paper, Box, Alert, Loader, Center } from "@mantine/core";
+import { IconAlertCircle } from "@tabler/icons-react";
+import { goalsApi, ApiError, Goal } from "@api";
+import BoundaryNavigator, { PartitionContext } from "@components/BoundaryNavigator";
+import GoalInputRow from "@components/GoalInputRow";
 
 // ====================================================
-// Interfaces (Kept interfaces needed locally)
+// Interfaces
 // ====================================================
-interface Goal {
-  id: string;
-  name: string;
-  type: string;
-  target?: string;
-  target_max?: string;
-  
-  group_name: string;
-  partition_type: string;
-  partition_label: string | null;
-  start_date: string; 
-  end_date: string;   
-}
-
 interface Entry {
   goal_id: string;
   value: string | null;
@@ -53,647 +32,535 @@ const SquadGoalEntryPage: React.FC<SquadGoalEntryPageProps> = ({ squadId }) => {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  
   const [currentBoundary, setCurrentBoundary] = useState<string | number | null>(null);
-  
-  const [openNoteId, setOpenNoteId] = useState<string | null>(null);
 
-  const navigate = useNavigate();
-  const apiURL = window.APP_CONFIG?.API_URL; 
-  const theme = useMantineTheme(); 
-  
-  const apiDependencies = [squadId, apiURL];
-  
-  const isBooleanType = (type: string) => ['boolean', 'achieved'].includes(type.toLowerCase());
+  // Debounce timer reference
+  const saveTimerRef = useRef<number | null>(null);
+  const DEBOUNCE_DELAY = 1000; // Wait 1 second after user stops typing
 
+  const isBooleanType = (type: string) => ["boolean", "achieved"].includes(type.toLowerCase());
 
   // ==========================
-  // Partition Context Derivation 
+  // Partition Context Derivation
   // ==========================
   const partitionContext: PartitionContext = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const defaultContext: PartitionContext = { 
-      type: 'Daily', 
-      label: 'Daily Entry', 
-      start: today, 
-      end: '2099-12-31', 
+    const today = new Date().toISOString().split("T")[0];
+    const defaultContext: PartitionContext = {
+      type: "Daily",
+      label: "Daily Entry",
+      start: today,
+      end: "2099-12-31",
       isCounter: false,
-      groupName: 'Default'
+      groupName: "Default",
     };
-    
+
     if (goals.length === 0) return defaultContext;
 
     const g = goals[0];
-    const isCounter = g.partition_type === 'CustomCounter';
-    const isTimeBased = ['PerMinute', 'PerHour'].includes(g.partition_type);
+    const isCounter = g.partition_type === "CustomCounter";
+    const isTimeBased = ["PerMinute", "PerHour"].includes(g.partition_type);
 
     let startValue: string | number;
     let endValue: string | number | null;
-    
+
     if (isCounter) {
-        startValue = g.start_date ? parseInt(g.start_date, 10) : 0; 
-        endValue = g.end_date ? parseInt(g.end_date, 10) : null;
+      startValue = g.start_date ? parseInt(g.start_date, 10) : 0;
+      endValue = g.end_date ? parseInt(g.end_date, 10) : null;
 
-        if (isNaN(startValue as number)) startValue = 0;
-        if (endValue !== null && isNaN(endValue as number)) endValue = null;
-
+      if (isNaN(startValue as number)) startValue = 0;
+      if (endValue !== null && isNaN(endValue as number)) endValue = null;
     } else {
-        if (isTimeBased) {
-             startValue = g.start_date || new Date().toISOString(); 
-             endValue = g.end_date || '2099-12-31T23:59:59.000Z';
-        } else {
-            startValue = g.start_date ? g.start_date.split('T')[0] : new Date().toISOString().split('T')[0];
-            endValue = g.end_date ? g.end_date.split('T')[0] : '2099-12-31';
-        }
+      // For time-based partitions, cap end date at today
+      const today = new Date();
+
+      if (isTimeBased) {
+        startValue = g.start_date || today.toISOString();
+        const configuredEnd = g.end_date ? new Date(g.end_date) : new Date("2099-12-31T23:59:59.000Z");
+        // Use the earlier of: configured end date or today
+        endValue = (configuredEnd < today ? configuredEnd : today).toISOString();
+      } else {
+        const todayStr = today.toISOString().split("T")[0];
+        startValue = g.start_date ? g.start_date.split("T")[0] : todayStr;
+        const configuredEnd = g.end_date ? g.end_date.split("T")[0] : "2099-12-31";
+        // Use the earlier of: configured end date or today
+        endValue = configuredEnd < todayStr ? configuredEnd : todayStr;
+      }
     }
-    
+
     return {
       type: g.partition_type,
       label: g.partition_label || g.partition_type,
       start: startValue,
       end: endValue,
       isCounter,
-      groupName: g.group_name
+      groupName: g.group_name,
     };
   }, [goals]);
 
   // ==========================
-  // Logic Functions
+  // Boundary Validation
   // ==========================
   const isBoundaryValid = useMemo(() => {
     if (currentBoundary === null) return false;
 
     const { isCounter, start, end } = partitionContext;
-    
+
     const current = isCounter ? Number(currentBoundary) : (currentBoundary as string);
     const startValue = isCounter ? Number(start) : (start as string);
-    
+
     if (current < startValue) {
-        return false;
+      return false;
     }
 
     if (end !== null && end !== undefined) {
-        const endValue = isCounter ? Number(end) : (end as string);
-        if (current > endValue) {
-            return false;
-        }
+      const endValue = isCounter ? Number(end) : (end as string);
+      if (current > endValue) {
+        return false;
+      }
     }
-    
+
     return true;
   }, [currentBoundary, partitionContext]);
-  
-  const calculateBoundaries = useCallback((context: PartitionContext): (string | number)[] => {
-      if (context.isCounter || typeof context.start !== 'string') return [];
-      
-      const boundaries: (string | number)[] = [];
-      const { start, end, type } = context;
-      
-      // Use local date methods here for initialization/current check as it's easier,
-      // but the API calls rely on the consistency established by the currentBoundary
-      let current = new Date(start); 
-      const endDate = new Date(end as string);
-      const now = new Date();
-      
-      const isTimeBased = ['PerMinute', 'PerHour'].includes(type);
-  
-      const getFormattedBoundary = (date: Date): string => {
-          if (isTimeBased) {
-              return date.toISOString();
-          }
-          return date.toISOString().split('T')[0]; 
-      };
-      
-      while (current <= endDate && current <= now) {
-          
-          const boundaryStr = getFormattedBoundary(current);
-          boundaries.push(boundaryStr);
-          
-          const next = new Date(current);
-  
-          switch (type) {
-              case 'Weekly':
-                  next.setDate(next.getDate() + 7);
-                  break;
-              case 'Monthly':
-                  next.setMonth(next.getMonth() + 1);
-                  break;
-              case 'Yearly':
-                  next.setFullYear(next.getFullYear() + 1);
-                  break;
-              case 'BiWeekly':
-                    next.setDate(next.getDate() + 14);
-                    break;
-              case 'Daily':
-              default:
-                  next.setDate(next.getDate() + 1);
-                  break;
-          }
-          
-          if (next.getTime() === current.getTime()) {
-              console.error("Boundary calculation stopped: Date is not advancing.");
-              break;
-          }
-          
-          current = next;
-      }
-  
-      return boundaries;
-  }, [partitionContext]);
 
+  const calculateBoundaries = useCallback((context: PartitionContext): (string | number)[] => {
+    if (context.isCounter || typeof context.start !== "string") return [];
+
+    const boundaries: (string | number)[] = [];
+    const { start, end, type } = context;
+
+    let current = new Date(start);
+    const endDate = new Date(end as string);
+    const now = new Date();
+
+    const isTimeBased = ["PerMinute", "PerHour"].includes(type);
+
+    const getFormattedBoundary = (date: Date): string => {
+      if (isTimeBased) {
+        return date.toISOString();
+      }
+      return date.toISOString().split("T")[0];
+    };
+
+    while (current <= endDate && current <= now) {
+      const boundaryStr = getFormattedBoundary(current);
+      boundaries.push(boundaryStr);
+
+      const next = new Date(current);
+
+      switch (type) {
+        case "Weekly":
+          next.setDate(next.getDate() + 7);
+          break;
+        case "Monthly":
+          next.setMonth(next.getMonth() + 1);
+          break;
+        case "Yearly":
+          next.setFullYear(next.getFullYear() + 1);
+          break;
+        case "BiWeekly":
+          next.setDate(next.getDate() + 14);
+          break;
+        case "Daily":
+        default:
+          next.setDate(next.getDate() + 1);
+          break;
+      }
+
+      if (next.getTime() === current.getTime()) {
+        console.error("Boundary calculation stopped: Date is not advancing.");
+        break;
+      }
+
+      current = next;
+    }
+
+    return boundaries;
+  }, []);
+
+  // Initialize current boundary
   useEffect(() => {
     if (currentBoundary === null && goals.length > 0) {
-      const { isCounter, start, end } = partitionContext;
+      const { isCounter, start } = partitionContext;
 
       if (isCounter) {
         setCurrentBoundary(start as number);
       } else {
         const validBoundaries = calculateBoundaries(partitionContext);
-        
+
         if (validBoundaries.length > 0) {
-            const mostRecentBoundary = validBoundaries[validBoundaries.length - 1];
-            setCurrentBoundary(mostRecentBoundary);
-            return;
-        } 
-        
-        const fallbackBoundary = start as string; 
+          const mostRecentBoundary = validBoundaries[validBoundaries.length - 1];
+          setCurrentBoundary(mostRecentBoundary);
+          return;
+        }
+
+        const fallbackBoundary = start as string;
         setCurrentBoundary(fallbackBoundary);
       }
     }
   }, [currentBoundary, goals, partitionContext, calculateBoundaries]);
 
+  // ==========================
+  // Save Handler (with proper useCallback)
+  // ==========================
+  const handleSave = useCallback(
+    async (currentEntries: { [goalId: string]: GoalEntryState }) => {
+      if (isSaving || currentBoundary === null) return;
 
-  const handleSave = useCallback(async (currentEntries: { [goalId: string]: GoalEntryState }) => {
-    if (isSaving || !apiURL || currentBoundary === null) return;
-
-    if (!isBoundaryValid) {
-        setMessage(`Cannot save entry. The current boundary (${currentBoundary}) is outside the configured goal group range.`);
+      if (!isBoundaryValid) {
+        setMessage(
+          `Cannot save entry. The current boundary (${currentBoundary}) is outside the configured goal group range.`
+        );
         setTimeout(() => setMessage(null), 5000);
-        return; 
-    }
+        return;
+      }
 
-    setIsSaving(true);
-    setMessage("Saving entries...");
+      setIsSaving(true);
+      setMessage("Saving entries...");
 
-    try {
-      const payloadEntries: { [goalId: string]: { value: string | null, note: string | null } } = {};
-      
-      goals.forEach(goal => {
+      try {
+        const payloadEntries: { [goalId: string]: { value: string | null; note: string | null } } = {};
+
+        goals.forEach((goal) => {
+          if (!goal.id) return; // Skip goals without an id
+
           const state = currentEntries[goal.id];
           if (!state) return;
 
           let valueToSend: string | null = null;
-          let noteToSend: string | null = state.note.trim() === '' ? null : state.note.trim(); 
+          let noteToSend: string | null = state.note.trim() === "" ? null : state.note.trim();
 
           if (isBooleanType(goal.type)) {
-              valueToSend = state.value; 
-          } else if (state.value.trim() !== '') {
-              valueToSend = state.value.trim();
+            valueToSend = state.value;
+          } else if (state.value.trim() !== "") {
+            valueToSend = state.value.trim();
           } else {
-              valueToSend = null;
+            valueToSend = null;
           }
 
           if (valueToSend !== null || noteToSend !== null) {
-              payloadEntries[goal.id] = { 
-                  value: valueToSend, 
-                  note: noteToSend 
-              };
+            payloadEntries[goal.id] = {
+              value: valueToSend,
+              note: noteToSend,
+            };
           }
-      });
-      
-      const payload = {
-          date: currentBoundary, 
-          entries: payloadEntries 
-      };
+        });
 
-      const res = await fetch(`${apiURL}/squads/${squadId}/goals/entry`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload), 
-      });
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Save failed: ${errorText}`);
+        const payload = {
+          date: currentBoundary,
+          entries: payloadEntries,
+        };
+
+        await goalsApi.submitEntry(squadId, payload);
+
+        setMessage("Entries saved ✅");
+      } catch (error) {
+        if (error instanceof ApiError) {
+          setMessage(`Error saving entries: ${error.message}`);
+        } else {
+          setMessage("Error saving entries");
+        }
+        console.error(error);
+      } finally {
+        setIsSaving(false);
+        setTimeout(() => setMessage(null), 3000);
       }
-      
-      setMessage("Entries saved ✅");
-    } catch (error: any) {
-      console.error(error);
-      setMessage(`Error saving entries: ${error.message || 'Check console.'}`);
-    } finally {
-      setIsSaving(false);
-      setTimeout(() => setMessage(null), 3000); 
-    }
-  }, [apiURL, squadId, currentBoundary, goals, isSaving, isBoundaryValid]);
+    },
+    [squadId, currentBoundary, goals, isSaving, isBoundaryValid]
+  );
 
-
+  // ==========================
+  // Fetch Goals
+  // ==========================
   useEffect(() => {
-    if (!apiURL) return;
     const fetchGoals = async () => {
       try {
-        const res = await fetch(`${apiURL}/squads/${squadId}/goals`, { credentials: "include" });
-        const data: Goal[] = await res.json();
+        const data = await goalsApi.getAll(squadId);
         setGoals(data);
-      } catch {
-        setMessage("Error loading goals");
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setMessage(err.message);
+        } else {
+          setMessage("Error loading goals");
+        }
       }
     };
     fetchGoals();
-  }, apiDependencies);
+  }, [squadId]);
 
+  // ==========================
+  // Fetch Entries for Current Boundary
+  // ==========================
   useEffect(() => {
-    if (goals.length === 0 || !apiURL || currentBoundary === null) return;
+    if (goals.length === 0 || currentBoundary === null) return;
 
     const fetchEntries = async () => {
       setLoading(true);
-      setEntriesState({}); 
-      setOpenNoteId(null); 
-      
-      // The currentBoundary is the date string the backend expects, which is now 
-      // guaranteed to be the correct YYYY-MM-DD from the UTC arithmetic below.
-      const url = `${apiURL}/squads/${squadId}/goals/entry?date=${currentBoundary}`;
-      
+      setEntriesState({});
+
       try {
-        const res = await fetch(url, {
-          credentials: "include",
+        const entriesData = await goalsApi.getEntry(squadId, currentBoundary.toString());
+
+        const prefilledState: { [goalId: string]: GoalEntryState } = {};
+
+        goals.forEach((goal) => {
+          if (!goal.id) return; // Skip goals without an id
+
+          const entry = entriesData.find((e: Entry) => e.goal_id === goal.id);
+
+          let initialValue = "";
+          if (isBooleanType(goal.type) && entry?.value !== "True") {
+            initialValue = "False";
+          }
+
+          const value =
+            entry?.value !== undefined && entry?.value !== null ? entry.value.toString() : initialValue;
+
+          const note = entry?.note !== undefined && entry?.note !== null ? entry.note.toString() : "";
+
+          prefilledState[goal.id] = { value, note };
         });
-        
-        if (res.ok) {
-            const entriesData: Entry[] = await res.json();
-            
-            const prefilledState: { [goalId: string]: GoalEntryState } = {};
-            
-            goals.forEach((goal) => {
-              const entry = entriesData.find((e) => e.goal_id === goal.id);
-              
-              let initialValue = "";
-              if (isBooleanType(goal.type) && entry?.value !== 'True') {
-                  initialValue = 'False';
-              }
-              
-              const value = (entry?.value !== undefined && entry?.value !== null) 
-                            ? entry.value.toString() 
-                            : initialValue;
-                            
-              const note = (entry?.note !== undefined && entry?.note !== null) 
-                           ? entry.note.toString() 
-                           : "";
 
-              prefilledState[goal.id] = { value, note };
-            });
-            
-            setEntriesState(prefilledState);
-            setMessage(null);
-
-        } else {
-            const errorText = await res.text();
-            console.error(`[API ERROR] Failed to fetch entries for ${currentBoundary}. Status: ${res.status}. Response: ${errorText}`);
-            setEntriesState({}); 
-            setMessage("Error fetching entries for this boundary");
-        }
+        setEntriesState(prefilledState);
+        setMessage(null);
       } catch (err) {
-        console.error(err);
-        setMessage("Error fetching entries for this boundary");
+        if (err instanceof ApiError) {
+          console.error(`Failed to fetch entries for ${currentBoundary}:`, err.message);
+          setMessage("Error fetching entries for this boundary");
+        }
+        setEntriesState({});
       } finally {
         setLoading(false);
       }
     };
 
     fetchEntries();
-  }, [currentBoundary, goals, ...apiDependencies]); 
+  }, [currentBoundary, goals, squadId]);
 
-  const handleChange = (goalId: string, field: keyof GoalEntryState, val: string) => {
-    if (!isBoundaryValid) return; 
+  // ==========================
+  // Input Change Handlers (with debouncing)
+  // ==========================
+  const handleValueChange = useCallback(
+    (goalId: string, val: string) => {
+      if (!isBoundaryValid) return;
 
-    setEntriesState((prev) => {
+      setEntriesState((prev) => {
         const newState = {
-            ...prev,
-            [goalId]: {
-                ...prev[goalId],
-                [field]: val,
-            },
+          ...prev,
+          [goalId]: {
+            ...prev[goalId],
+            value: val,
+          },
         };
-        
-        // This is where you trigger the save after a change
-        handleSave(newState);
-        
+
+        // Clear existing timer
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current);
+        }
+
+        // Set new debounced save
+        saveTimerRef.current = setTimeout(() => {
+          handleSave(newState);
+          saveTimerRef.current = null;
+        }, DEBOUNCE_DELAY);
+
         return newState;
-    });
-  };
-  
-  const handleCheckboxChange = (goalId: string, isChecked: boolean) => {
-      handleChange(goalId, 'value', isChecked ? 'True' : 'False');
-  };
-  
-  const toggleNote = (goalId: string) => {
-      if (!isBoundaryValid) return; 
-      setOpenNoteId(prevId => prevId === goalId ? null : goalId);
-  };
+      });
+    },
+    [isBoundaryValid, handleSave]
+  );
 
-  /**
-   * FIX: Uses UTC logic for date arithmetic and ensures the boundary is capped at the start date.
-   */
-  const changeBoundary = useCallback((delta: number) => {
-    if (currentBoundary === null) return;
-    const { isCounter, start, end, type } = partitionContext;
+  const handleNoteChange = useCallback(
+    (goalId: string, val: string) => {
+      if (!isBoundaryValid) return;
 
-    if (isCounter) {
-      // Counter logic remains unchanged
-      const currentNum = Number(currentBoundary);
-      const startNum = Number(start);
-      const endNum = end !== null ? Number(end) : null;
-      
-      const newBoundary = currentNum + delta;
+      setEntriesState((prev) => {
+        const newState = {
+          ...prev,
+          [goalId]: {
+            ...prev[goalId],
+            note: val,
+          },
+        };
 
-      if (newBoundary >= startNum && (endNum === null || newBoundary <= endNum)) {
-        setCurrentBoundary(newBoundary);
+        // Clear existing timer
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current);
+        }
+
+        // Set new debounced save
+        saveTimerRef.current = setTimeout(() => {
+          handleSave(newState);
+          saveTimerRef.current = null;
+        }, DEBOUNCE_DELAY);
+
+        return newState;
+      });
+    },
+    [isBoundaryValid, handleSave]
+  );
+
+  const handleCheckboxChange = useCallback(
+    (goalId: string, isChecked: boolean) => {
+      setEntriesState((prev) => {
+        const newState = {
+          ...prev,
+          [goalId]: {
+            ...prev[goalId],
+            value: isChecked ? "True" : "False",
+          },
+        };
+        // Save immediately for checkboxes
+        handleSave(newState);
+        return newState;
+      });
+    },
+    [handleSave]
+  );
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
+
+  // ==========================
+  // Boundary Navigation
+  // ==========================
+  const changeBoundary = useCallback(
+    (delta: number) => {
+      if (currentBoundary === null) return;
+      const { isCounter, start, end, type } = partitionContext;
+
+      if (isCounter) {
+        const currentNum = Number(currentBoundary);
+        const startNum = Number(start);
+        const endNum = end !== null ? Number(end) : null;
+
+        const newBoundary = currentNum + delta;
+
+        if (newBoundary >= startNum && (endNum === null || newBoundary <= endNum)) {
+          setCurrentBoundary(newBoundary);
+        }
       } else {
-        console.warn(`[NAVIGATION] Attempted to navigate to counter ${newBoundary}, which is outside the range [${startNum}, ${endNum}].`);
-      }
-    } else {
-      const currentStr = currentBoundary as string;
-      const startStr = start as string;
-      const endStr = end as string; 
-      
-      // --- FIX 1: Create Date object using UTC components ---
-      const parts = currentStr.split('-');
-      const year = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1; // 0-indexed month
-      const day = parseInt(parts[2], 10);
-      
-      // Initialize Date object using Date.UTC() to treat YYYY-MM-DD as calendar date
-      const d = new Date(Date.UTC(year, month, day)); 
-      const newDate = new Date(d);
-      // -----------------------------------------------------
-      
-      const isTimeBased = ['PerMinute', 'PerHour'].includes(type);
-      
-      // --- FIX 2: Use UTC methods for all date arithmetic ---
-      switch (type) {
-        case 'Weekly':
-          newDate.setUTCDate(newDate.getUTCDate() + delta * 7);
-          break;
-        case 'Monthly':
-          newDate.setUTCMonth(newDate.getUTCMonth() + delta);
-          break;
-        case 'Yearly':
-          newDate.setUTCFullYear(newDate.getUTCFullYear() + delta);
-          break;
-        case 'BiWeekly':
-          newDate.setUTCDate(newDate.getUTCDate() + delta * 14);
-          break;
-        case 'Daily':
-        default:
-          newDate.setUTCDate(newDate.getUTCDate() + delta);
-          break;
-      }
-      // -----------------------------------------------------
-      
-      let newBoundaryStr: string;
+        const currentStr = currentBoundary as string;
+        const startStr = start as string;
+        const endStr = end as string;
 
-      if (isTimeBased) {
-        // Time-based uses the full ISO string
-        newBoundaryStr = newDate.toISOString();
-      } else {
-        // Date-based uses the YYYY-MM-DD part, which is now correctly preserved by UTC arithmetic
-        newBoundaryStr = newDate.toISOString().split("T")[0];
-      }
-      
-      // --- FIX 3: Boundary Validation Logic (Recap for preventing overshoot) ---
-      if (newBoundaryStr < startStr) {
-          // If the calculated boundary is less than the goal's start, cap it at the start date.
+        const parts = currentStr.split("-");
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+
+        const d = new Date(Date.UTC(year, month, day));
+        const newDate = new Date(d);
+
+        switch (type) {
+          case "Weekly":
+            newDate.setUTCDate(newDate.getUTCDate() + delta * 7);
+            break;
+          case "Monthly":
+            newDate.setUTCMonth(newDate.getUTCMonth() + delta);
+            break;
+          case "Yearly":
+            newDate.setUTCFullYear(newDate.getUTCFullYear() + delta);
+            break;
+          case "BiWeekly":
+            newDate.setUTCDate(newDate.getUTCDate() + delta * 14);
+            break;
+          case "Daily":
+          default:
+            newDate.setUTCDate(newDate.getUTCDate() + delta);
+            break;
+        }
+
+        const isTimeBased = ["PerMinute", "PerHour"].includes(type);
+        let newBoundaryStr: string;
+
+        if (isTimeBased) {
+          newBoundaryStr = newDate.toISOString();
+        } else {
+          newBoundaryStr = newDate.toISOString().split("T")[0];
+        }
+
+        if (newBoundaryStr < startStr) {
           if (currentBoundary !== startStr) {
-              setCurrentBoundary(startStr);
+            setCurrentBoundary(startStr);
           }
-      } else if (newBoundaryStr <= endStr) {
-        // Only set the boundary if it is valid (within the start/end range)
-        setCurrentBoundary(newBoundaryStr);
-      } else {
-        console.warn(`[NAVIGATION] Attempted to navigate to boundary ${newBoundaryStr}, which is outside the range [${startStr}, ${endStr}].`);
+        } else if (newBoundaryStr <= endStr) {
+          setCurrentBoundary(newBoundaryStr);
+        }
       }
-      // -----------------------------------------------------------------------
-    }
-  }, [currentBoundary, partitionContext]);
-  
-  // ==========================
-  // Render Helpers 
-  // ==========================
-  const renderGoalInput = (goal: Goal) => {
-    const currentState = entriesState[goal.id] || { value: '', note: '' };
-    const goalType = goal.type.toLowerCase();
-    
-    const hasNoteContent = currentState.note.trim().length > 0;
-    const isNoteOpen = openNoteId === goal.id || hasNoteContent;
-    
-    const isDisabled = !isBoundaryValid;
-    
-    let inputField;
-    let targetLabel = '';
-
-    // 1. Determine Input Type and Target Label
-    if (isBooleanType(goalType)) {
-        targetLabel = 'Achieved';
-
-        inputField = (
-            <Checkbox
-                checked={currentState.value === 'True'}
-                onChange={(e) => handleCheckboxChange(goal.id, e.target.checked)}
-                disabled={isDisabled}
-                size="md"
-                label="Did I achieve this?"
-                styles={{ label: { fontSize: theme.fontSizes.sm, fontWeight: 500 } }}
-            />
-        );
-    } else {
-        let placeholder = 'Value';
-        let htmlInputType: 'text' | 'time' = 'text';
-
-        if (goalType === 'range' && goal.target && goal.target_max) {
-            placeholder = `Range: ${goal.target} to ${goal.target_max}`;
-            targetLabel = `${goal.target} - ${goal.target_max}`;
-        } else if (goal.target) {
-            placeholder = `Target: ${goal.target}`;
-            targetLabel = `${goal.target}`;
-        }
-        
-        if (goalType === 'time') {
-            htmlInputType = 'time';
-        }
-        
-        // Use a standard HTML input styled by Mantine's theme
-        inputField = (
-            <input
-                type={htmlInputType} 
-                value={currentState.value}
-                onChange={(e) => handleChange(goal.id, 'value', e.target.value)}
-                placeholder={placeholder}
-                inputMode={partitionContext.isCounter || goalType === 'number' ? 'numeric' : 'text'}
-                disabled={isDisabled}
-                // Apply input styling that works well in a Mantine context
-                style={{
-                    width: '100%',
-                    padding: theme.spacing.xs,
-                    borderRadius: theme.radius.sm,
-                    border: `1px solid ${isDisabled ? theme.colors.gray[3] : theme.colors.gray[4]}`,
-                    backgroundColor: isDisabled ? theme.colors.gray[0] : theme.white,
-                    transition: 'border-color 150ms',
-                }}
-            />
-        );
-    }
-    
-    // 2. Render Row Structure using Mantine components
-    return (
-      <Paper 
-          key={goal.id} 
-          p="md" 
-          withBorder 
-          radius="md" 
-          mb="md" 
-          bg={isDisabled ? theme.colors.gray[1] : theme.white}
-      >
-          {/* Goal Label & Controls: Responsive Layout */}
-          <Group position="apart" align="start" mb={isBooleanType(goalType) ? 0 : 'sm'}>
-              {/* Goal Name and Meta (ALWAYS VERTICAL STACK ON MOBILE) */}
-              <Stack gap={2} sx={{ 
-                  flex: 1, 
-                  // Desktop: min-width: 576px. Ensures goal name takes 45% width.
-                  [`@media (min-width: ${theme.breakpoints.sm})`]: { 
-                      flexDirection: 'column', 
-                      flexBasis: '45%', 
-                      maxWidth: '45%', 
-                  }
-              }}>
-                  <Text weight={600} size="md">{goal.name}</Text>
-                  <Text size="xs" color="dimmed">
-                      ({goal.type}{targetLabel && `: ${targetLabel}`})
-                  </Text>
-              </Stack>
-              
-              {/* Value Input/Checkbox & Note Toggle */}
-              <Group 
-                  gap="xs" 
-                  align="center"
-                  sx={{ 
-                      flex: 1,
-                      [`@media (min-width: ${theme.breakpoints.sm})`]: {
-                          flexBasis: '50%',
-                          maxWidth: '50%',
-                          justifyContent: 'flex-end', 
-                      }
-                  }}
-              >
-                  {/* Input/Checkbox Field */}
-                  <Box sx={{ flex: 1 }}>
-                      {inputField}
-                  </Box>
-
-                  {/* Note Icon Button */}
-                  <Button
-                      onClick={isDisabled ? undefined : () => toggleNote(goal.id)}
-                      disabled={isDisabled}
-                      variant={isNoteOpen ? 'filled' : hasNoteContent ? 'light' : 'subtle'}
-                      color={isNoteOpen ? 'blue' : 'gray'}
-                      size="sm"
-                      px={isBooleanType(goalType) ? theme.spacing.xs : 0} 
-                      title={isDisabled ? 'Boundary out of range' : hasNoteContent ? 'Edit Note' : 'Add Note'}
-                      leftSection={<Text size="md">📝</Text>}
-                      compact
-                  >
-                      {/* Only show 'Note' text on desktop/larger screens */}
-                      <Box sx={{ display: 'none', [`@media (min-width: ${theme.breakpoints.sm})`]: { display: 'block' } }}>
-                        Note
-                      </Box>
-                  </Button>
-              </Group>
-          </Group>
-          
-          {/* Conditional Note Input: Renders BELOW the row */}
-          {isNoteOpen && (
-              <Box mt="sm">
-                  <input
-                      type="text"
-                      value={currentState.note}
-                      onChange={(e) => handleChange(goal.id, 'note', e.target.value)}
-                      placeholder="Enter your note here..."
-                      disabled={isDisabled}
-                      // Apply full-width input styling
-                      style={{
-                          width: '100%',
-                          padding: theme.spacing.xs,
-                          borderRadius: theme.radius.sm,
-                          border: `1px solid ${isDisabled ? theme.colors.gray[3] : theme.colors.gray[4]}`,
-                          backgroundColor: isDisabled ? theme.colors.gray[0] : theme.white,
-                      }}
-                  />
-              </Box>
-          )}
-      </Paper>
-    );
-  };
-  
-  // Custom container component for conditional Paper styles
-  const OuterContainer = ({ children }: { children: React.ReactNode }) => (
-    <Box
-      sx={(t) => ({
-        // Apply Paper styles only on desktop (min-width: sm)
-        [`@media (min-width: ${t.breakpoints.sm})`]: {
-          border: `1px solid ${t.colors.gray[3]}`,
-          borderRadius: t.radius.md,
-          boxShadow: t.shadows.md,
-          padding: t.spacing.xl,
-          backgroundColor: t.white,
-        },
-        // Base padding for mobile
-        padding: t.spacing.sm,
-      })}
-    >
-        {children}
-    </Box>
+    },
+    [currentBoundary, partitionContext]
   );
 
   // ==========================
   // Main Render
   // ==========================
-  if (loading || currentBoundary === null) return <p>Loading goals for group...</p>;
-  
+  if (loading || currentBoundary === null) {
+    return (
+      <Center style={{ minHeight: 200 }}>
+        <Loader size="xl" />
+      </Center>
+    );
+  }
+
   return (
-    <OuterContainer>
-      <div className="goal-entry-page">
-        
-        <Title order={1} className="page-title">{partitionContext.groupName} Entries</Title>
-        
-        {/* Boundary Navigator (Now imported) */}
-        <BoundaryNavigator 
-            currentBoundary={currentBoundary} 
-            changeBoundary={changeBoundary} 
-            partitionContext={partitionContext}
+    <Box style={{ maxWidth: 600, margin: "0 auto", padding: "20px" }}>
+      <Stack gap="md">
+        <Title order={1}>{partitionContext.groupName} Entries</Title>
+
+        <BoundaryNavigator
+          currentBoundary={currentBoundary}
+          changeBoundary={changeBoundary}
+          partitionContext={partitionContext}
         />
-        
-        {/* Boundary Validity Alert */}
+
         {!isBoundaryValid && (
-             <Paper p="sm" mb="md" radius="md" color="red" bg={theme.colors.red[0]} withBorder>
-                <Text size="sm" color="red" weight={500} align="center">
-                    <span role="img" aria-label="Warning">⚠️</span> This boundary ({currentBoundary}) is outside the group's configured range. Entries cannot be saved here.
-                </Text>
-            </Paper>
+          <Alert color="red" title="Boundary Out of Range" icon={<IconAlertCircle size={16} />}>
+            This boundary ({currentBoundary}) is outside the group's configured range. Entries cannot be saved
+            here.
+          </Alert>
         )}
 
-        {goals.length === 0 && <p>No goals configured for this squad group.</p>}
-        
-        {/* Goal List */}
-        <Stack gap="md" className="goal-list">
-          {goals.map(renderGoalInput)}
-        </Stack>
+        {goals.length === 0 && (
+          <Paper p="md" withBorder>
+            <Text c="dimmed" ta="center">
+              No goals configured for this squad group.
+            </Text>
+          </Paper>
+        )}
+
+        {/* Goal Input List */}
+        {goals.map((goal) => {
+          if (!goal.id) return null; // Skip goals without an id
+
+          return (
+            <GoalInputRow
+              key={goal.id}
+              goal={goal}
+              currentState={entriesState[goal.id] || { value: "", note: "" }}
+              isDisabled={!isBoundaryValid}
+              onValueChange={handleValueChange}
+              onNoteChange={handleNoteChange}
+              onCheckboxChange={handleCheckboxChange}
+            />
+          );
+        })}
 
         {message && (
-          <p className={message.includes("✅") ? "success-message" : "error-message"}>
+          <Alert
+            color={message.includes("✅") ? "green" : message.includes("Saving") ? "blue" : "red"}
+            title={message.includes("✅") ? "Success" : message.includes("Saving") ? "Saving" : "Error"}
+          >
             {message}
-          </p>
+          </Alert>
         )}
-      </div>
-    </OuterContainer>
+      </Stack>
+    </Box>
   );
 };
 

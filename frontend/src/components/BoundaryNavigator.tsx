@@ -74,7 +74,7 @@ const BoundaryNavigator: React.FC<BoundaryNavigatorProps> = ({ currentBoundary, 
 
   const isAtEndBoundary = useMemo(() => {
     if (end === null || end === undefined) return false;
-    
+
     let current: string | number;
     let maxEnd: string | number;
 
@@ -85,9 +85,27 @@ const BoundaryNavigator: React.FC<BoundaryNavigatorProps> = ({ currentBoundary, 
         current = currentBoundary as string;
         maxEnd = end as string;
     }
-    
+
     return current >= maxEnd;
   }, [currentBoundary, end, isCounter]);
+
+  const isAtStartBoundary = useMemo(() => {
+    const { start } = partitionContext;
+    if (start === null || start === undefined) return false;
+
+    let current: string | number;
+    let minStart: string | number;
+
+    if (isCounter) {
+        current = Number(currentBoundary);
+        minStart = Number(start);
+    } else {
+        current = currentBoundary as string;
+        minStart = start as string;
+    }
+
+    return current <= minStart;
+  }, [currentBoundary, partitionContext, isCounter]);
 
   return (
     // Outer Stack centers all content
@@ -116,10 +134,11 @@ const BoundaryNavigator: React.FC<BoundaryNavigatorProps> = ({ currentBoundary, 
             mt="xs" 
             sx={{ width: '100%', maxWidth: 300 }}
         >
-            <Button 
-                variant="default" 
+            <Button
+                variant="default"
                 color="dark"
                 onClick={() => changeBoundary(-1)}
+                disabled={isAtStartBoundary}
                 leftSection={<IconChevronLeft size={16} />}
             >
                 Prev

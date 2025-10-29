@@ -496,19 +496,25 @@ export const useSquadGoalsManager = (squadId: string, isAdmin: boolean): UseSqua
 
     if (field === "partition_type") {
       const newType = value as GoalGroup["partition_type"];
+      const oldType = updatedGroup.partition_type;
       updatedGroup.partition_type = newType;
 
-      if (newType === "CustomCounter") {
+      // Only reset dates when switching between counter and time-based, preserve existing values otherwise
+      if (newType === "CustomCounter" && oldType !== "CustomCounter") {
+        // Switching TO CustomCounter
         updatedGroup.partition_label = "Custom Counter";
         updatedGroup.start_date = "1";
         updatedGroup.end_date = "";
-      } else {
+      } else if (newType !== "CustomCounter" && oldType === "CustomCounter") {
+        // Switching FROM CustomCounter to time-based
         const today = new Date().toISOString();
         const nextYear = new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString();
         updatedGroup.start_date = formatToDateInput(today);
         updatedGroup.end_date = formatToDateInput(nextYear);
         updatedGroup.partition_label = undefined;
       }
+      // If both are time-based (e.g., Daily -> Weekly), preserve the existing dates
+      // If both are CustomCounter, preserve the existing values
     } else {
       const finalValue = value ?? "";
       if (updatedGroup.partition_type === "CustomCounter" && (field === "start_date" || field === "end_date")) {

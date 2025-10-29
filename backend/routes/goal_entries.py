@@ -18,8 +18,10 @@ from decorators import squad_member_required
 from utils import (
     validate_boundary_value,
     get_goal_entries,
+    check_goal_status,
     upsert_goal_entry,
-    parse_date_range
+    parse_date_range,
+    is_boundary_valid_for_partition
 )
 
 goal_entries_bp = Blueprint('goal_entries', __name__)
@@ -122,7 +124,12 @@ def get_goal_history(squad_id, squad, group_id=None):
     Returns all goal entries for the current user in this squad,
     filling missing boundaries up to the latest recorded entry.
     Entries are returned in chronological order (oldest → newest).
+    Supports pagination with page and page_size query parameters.
     """
+    # Get pagination parameters
+    page = request.args.get('page', 0, type=int)
+    page_size = request.args.get('page_size', 7, type=int)
+
     query = (
         GoalEntry.query
         .join(Goal)
@@ -140,18 +147,22 @@ def get_goal_history(squad_id, squad, group_id=None):
         return jsonify({
             "user_id": current_user.id,
             "squad_id": squad_id,
-            "groups": []
+            "groups": [],
+            "total_pages": 0
         }), 200
 
     grouped = defaultdict(lambda: {
         "goal_id": None,
         "goal_name": None,
+        "goal_type": None,
+        "goal_target": None,
+        "goal_target_max": None,
         "partition_type": None,
         "start_value": None,
         "boundaries": {}
     })
 
-    # --- Step 1: Collect all entries ---
+    # --- Step 1: Collect all entries and goal metadata, filtering by valid boundaries ---
     for entry in entries:
         goal = entry.goal
         if not goal:
@@ -161,60 +172,175 @@ def get_goal_history(squad_id, squad, group_id=None):
         if grouped[gid]["goal_id"] is None:
             grouped[gid]["goal_id"] = gid
             grouped[gid]["goal_name"] = goal.name
+            grouped[gid]["goal_type"] = goal.type
+            grouped[gid]["goal_target"] = goal.target
+            grouped[gid]["goal_target_max"] = goal.target_max
             grouped[gid]["partition_type"] = goal.goal_group.partition_type if goal.goal_group else None
-            grouped[gid]["start_value"] = (
-                goal.goal_group.start_value if "counter" in goal.goal_group.partition_type.lower() else goal.goal_group.start_date.isoformat()
-            )
+
+            # Safely extract start_value based on partition type
+            if goal.goal_group:
+                partition_type_str = str(goal.goal_group.partition_type).lower() if goal.goal_group.partition_type else ""
+                if "counter" in partition_type_str:
+                    grouped[gid]["start_value"] = goal.goal_group.start_value
+                else:
+                    grouped[gid]["start_value"] = goal.goal_group.start_date.isoformat() if goal.goal_group.start_date else None
+            else:
+                grouped[gid]["start_value"] = None
+
+        # FILTER: Only include entries with boundaries valid for current partition type
+        partition_type = grouped[gid]["partition_type"]
+        start_value = grouped[gid]["start_value"]
+
+        if not is_boundary_valid_for_partition(
+            str(entry.boundary_value),
+            partition_type,
+            start_value
+        ):
+            # Skip this entry - it doesn't align with the current partition type
+            continue
+
+        # Calculate status using check_goal_status
+        status = check_goal_status(
+            goal.type,
+            goal.target,
+            goal.target_max,
+            entry.value
+        )
 
         grouped[gid]["boundaries"][str(entry.boundary_value)] = {
             "entry_id": entry.id,
             "boundary": str(entry.boundary_value),
             "value": entry.value,
-            "note": entry.note
+            "note": entry.note,
+            "status": status
         }
 
-    # --- Step 2: Generate full boundary list + fill gaps ---
+    # --- Step 2: Generate boundary lists from group start/end dates ---
+    # All goals in the same group should share the same boundary range
     for goal_data in grouped.values():
-        partition_type = goal_data["partition_type"]
-        start_value = goal_data["start_value"]
-        existing_boundaries = list(goal_data["boundaries"].keys())
-        if not existing_boundaries:
+        # Skip if this goal has no group information
+        if goal_data["goal_id"] is None:
             continue
 
-        if "counter" in partition_type.lower():
-            start = int(start_value)
-            end = max(int(b) for b in existing_boundaries)
-            all_boundaries = [str(i) for i in range(start, end + 1)]
+        # Get the goal's group to access start/end dates
+        goal = Goal.query.get(goal_data["goal_id"])
+        if not goal or not goal.goal_group:
+            continue
 
+        goal_group = goal.goal_group
+        partition_type = goal_data["partition_type"]
+        start_value = goal_data["start_value"]
+
+        is_counter = partition_type is not None and "counter" in str(partition_type).lower()
+
+        # DEBUG: Log partition detection
+        print(f"\n=== Processing goal: {goal_data.get('goal_name')} ===")
+        print(f"Partition type: {partition_type}")
+        print(f"Is counter: {is_counter}")
+        print(f"Start value: {start_value}")
+        print(f"Group end value: {goal_group.end_value if is_counter else goal_group.end_date}")
+
+        # Store is_counter flag for use in pagination step
+        goal_data["is_counter"] = is_counter
+
+        # Generate all boundaries from group start to group end
+        if is_counter:
+            try:
+                start = int(start_value or goal_group.start_value or 1)
+
+                # If no end_value is configured, use the maximum boundary from existing entries
+                if goal_group.end_value is not None:
+                    end = int(goal_group.end_value)
+                else:
+                    # Use the max boundary from existing entries, or default to start
+                    existing_boundaries = [int(b) for b in goal_data["boundaries"].keys() if b.isdigit()]
+                    end = max(existing_boundaries) if existing_boundaries else start
+
+                all_boundaries = [str(i) for i in range(start, end + 1)]
+                print(f"Counter boundaries: {start} to {end} ({len(all_boundaries)} total)")
+            except (ValueError, TypeError) as e:
+                # If conversion fails, use existing boundaries only
+                print(f"ERROR: Cannot parse counter values for goal '{goal_data.get('goal_name')}': {e}")
+                all_boundaries = sorted(goal_data["boundaries"].keys())
+                is_counter = False
+                goal_data["is_counter"] = False
         else:
-            start_date = datetime.fromisoformat(start_value)
-            max_date = max(datetime.fromisoformat(b) for b in existing_boundaries)
-            all_boundaries = generate_boundary_series(start_date, max_date, partition_type)
+            try:
+                start_date = datetime.fromisoformat(start_value)
+                # Use group's end_date, but cap at today's date to exclude future dates
+                end_date = goal_group.end_date
+                today = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
 
-        # Fill missing with blanks
+                if end_date:
+                    # Use the earlier of: group end date or today
+                    effective_end_date = min(end_date, today)
+
+                    # Only generate boundaries if start is not in the future
+                    if start_date <= today:
+                        all_boundaries = generate_boundary_series(start_date, effective_end_date, partition_type)
+                        print(f"Date boundaries: {start_date.date()} to {effective_end_date.date()} ({len(all_boundaries)} total)")
+                    else:
+                        # Start date is in the future, no history to show
+                        all_boundaries = []
+                        print(f"Start date {start_date.date()} is in the future - no boundaries to display")
+                else:
+                    # No end date specified, use only existing boundaries
+                    all_boundaries = sorted(goal_data["boundaries"].keys())
+                    print(f"No end date - using {len(all_boundaries)} existing boundaries")
+            except (ValueError, TypeError) as e:
+                print(f"ERROR: Cannot parse dates for goal '{goal_data.get('goal_name')}': {e}")
+                all_boundaries = sorted(goal_data["boundaries"].keys())
+
+        # Fill missing boundaries with blanks
         for boundary in all_boundaries:
             if boundary not in goal_data["boundaries"]:
                 goal_data["boundaries"][boundary] = {
                     "entry_id": None,
                     "boundary": boundary,
                     "value": None,
-                    "note": None
+                    "note": None,
+                    "status": "blank"
                 }
 
         # Sort by boundary ascending (latest last)
         goal_data["boundaries"] = dict(sorted(
             goal_data["boundaries"].items(),
             key=lambda x: (
-                int(x[0]) if "counter" in partition_type.lower() else datetime.fromisoformat(x[0])
+                int(x[0]) if is_counter else datetime.fromisoformat(x[0])
             )
         ))
 
+    # --- Step 3: Apply pagination ---
+    for goal_data in grouped.values():
+        all_boundary_keys = list(goal_data["boundaries"].keys())
+        total_boundaries = len(all_boundary_keys)
+        total_pages = (total_boundaries + page_size - 1) // page_size if page_size > 0 else 1
+
+        # Calculate slice indices (newest first, so reverse)
+        # Page 0 = newest entries
+        all_boundary_keys.reverse()
+        start_idx = page * page_size
+        end_idx = start_idx + page_size
+        paginated_keys = all_boundary_keys[start_idx:end_idx]
+
+        # Filter boundaries to only include paginated keys
+        goal_data["boundaries"] = {k: goal_data["boundaries"][k] for k in reversed(paginated_keys) if k in goal_data["boundaries"]}
+        goal_data["total_pages"] = total_pages
+
+        # Clean up temporary flag (only if it exists)
+        if "is_counter" in goal_data:
+            del goal_data["is_counter"]
+
     response_groups = list(grouped.values())
+
+    # Get total pages from first group (all should be same)
+    total_pages = response_groups[0]["total_pages"] if response_groups else 0
 
     return jsonify({
         "user_id": current_user.id,
         "squad_id": squad_id,
-        "groups": response_groups
+        "groups": response_groups,
+        "total_pages": total_pages
     })
 
 

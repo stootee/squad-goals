@@ -257,7 +257,7 @@ const SquadMembersPage: React.FC<SquadMembersPageProps> = ({ squadId }) => {
   });
 
   return (
-    <Stack gap="md">
+    <Stack gap="md" maw={800} style={{ margin: '0 auto' }}>
       <Paper shadow="sm" p="lg" withBorder>
         <Stack gap="lg">
           <Title order={3}>Squad Members</Title>

@@ -302,3 +302,133 @@ def upsert_goal_entry(
         db.session.add(entry)
 
     return entry
+
+
+# --- GOAL STATUS CALCULATION ---
+
+def is_boundary_valid_for_partition(
+    boundary_value: str,
+    partition_type: str,
+    start_value: Union[str, int, datetime]
+) -> bool:
+    """
+    Check if a boundary value is valid for the given partition type.
+
+    For time-based partitions, checks if the boundary aligns with the partition
+    interval from the start date.
+
+    For counter-based partitions, always returns True.
+
+    Args:
+        boundary_value: The boundary value to check (date string or counter)
+        partition_type: The partition type (Daily, Weekly, BiWeekly, Monthly, CustomCounter)
+        start_value: The start date/datetime or counter value
+
+    Returns:
+        True if the boundary is valid for this partition type, False otherwise
+    """
+    # Counter-based partitions: all integer boundaries are valid
+    is_counter = partition_type is not None and "counter" in str(partition_type).lower()
+    if is_counter:
+        try:
+            int(boundary_value)
+            return True
+        except ValueError:
+            return False
+
+    # Time-based partitions: check alignment with partition interval
+    try:
+        from datetime import timedelta
+        from dateutil.relativedelta import relativedelta
+
+        boundary_date = datetime.fromisoformat(boundary_value)
+
+        # Convert start_value to datetime if it's a string
+        if isinstance(start_value, str):
+            start_date = datetime.fromisoformat(start_value)
+        elif isinstance(start_value, datetime):
+            start_date = start_value
+        else:
+            # Can't validate without proper start date
+            return True
+
+        # Calculate the difference
+        if partition_type == "Daily":
+            # Every day is valid
+            return True
+        elif partition_type == "Weekly":
+            # Check if difference is a multiple of 7 days
+            delta_days = (boundary_date - start_date).days
+            return delta_days % 7 == 0
+        elif partition_type == "BiWeekly":
+            # Check if difference is a multiple of 14 days
+            delta_days = (boundary_date - start_date).days
+            return delta_days % 14 == 0
+        elif partition_type == "Monthly":
+            # Check if the day matches the start day (same day of month)
+            return boundary_date.day == start_date.day
+        else:
+            # Unknown partition type, accept all boundaries
+            return True
+
+    except (ValueError, TypeError, AttributeError):
+        # If we can't parse, accept the boundary
+        return True
+
+
+def check_goal_status(
+    goal_type: str,
+    target: Optional[str],
+    target_max: Optional[str],
+    entry_value: Optional[str]
+) -> str:
+    """
+    Determines if the goal is met, unmet, or blank based on type, target, and value.
+
+    Args:
+        goal_type: The type of goal (count, above, below, range, boolean, achieved, time)
+        target: The target value for the goal
+        target_max: The maximum target (for range goals)
+        entry_value: The actual entry value
+
+    Returns:
+        Status string: "met", "unmet", or "blank"
+    """
+    if entry_value is None or entry_value.strip() == '':
+        return "blank"
+
+    status = "unmet"
+
+    try:
+        # Standard Numeric/Comparison Goals
+        if goal_type in ['count', 'above', 'below', 'range', 'between', 'threshold', 'ratio']:
+            value = float(entry_value)
+            target_num = float(target) if target else None
+
+            if goal_type in ['count', 'above', 'threshold', 'ratio']:
+                if target_num is not None and value >= target_num:
+                    status = "met"
+            elif goal_type == 'below':
+                if target_num is not None and value <= target_num:
+                    status = "met"
+            elif goal_type in ['range', 'between']:
+                target_max_num = float(target_max) if target_max else None
+                if target_num is not None and target_max_num is not None:
+                    if value >= target_num and value <= target_max_num:
+                        status = "met"
+
+        # Boolean/Achieved Goals
+        elif goal_type in ['boolean', 'achieved']:
+            if entry_value.lower() in ['true', '1', 'yes']:
+                status = "met"
+
+        # Time Goals (Usually always 'met' if a value is entered)
+        elif goal_type == 'time':
+            if entry_value.strip():
+                status = "met"
+
+    except (ValueError, TypeError):
+        # If conversion fails, mark as unmet
+        status = "unmet"
+
+    return status

@@ -1,6 +1,6 @@
 // FILE: src/components/SquadLayout.tsx
 import React, { useEffect, useState } from "react";
-import SquadGoalSubmissionPage from "@pages/SquadGoalSubmissionPage";
+import SquadGoalsHistoryPage from "@pages/SquadGoalsHistoryPage";
 import SquadMembersPage from "@pages/SquadMembersPage";
 import SquadDailyOverviewPage from "@pages/SquadGoalsOverviewPage";
 import SquadGoalsManagerPage from "@pages/SquadGoalsManagerPage";
@@ -9,7 +9,7 @@ import AppLayout from "@components/AppLayout";
 // Mantine components
 import { Tabs, Paper, Box, Stack } from "@mantine/core";
 
-type SquadTabKey = "today" | "submission" | "progress" | "members" | "goals";
+type SquadTabKey = "entry" | "history" | "progress" | "members" | "goals";
 
 interface SquadLayoutProps {
   squadId: string;
@@ -20,12 +20,12 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
 
   const [activeTab, setActiveTab] = useState<SquadTabKey>(() => {
     const savedTab = localStorage.getItem(`squad-${squadId}-activeTab`);
-    return (savedTab as SquadTabKey) || "today";
+    return (savedTab as SquadTabKey) || "entry";
   });
   
   // 1. ADD STATE: Key to force remount of SquadGoalEntryPage
   const [goalEntryKey, setGoalEntryKey] = useState(0);
-  // 1b. NEW STATE: Key to force remount of SquadGoalSubmissionPage
+  // 1b. NEW STATE: Key to force remount of SquadGoalsHistoryPage
   const [historyKey, setHistoryKey] = useState(0); 
 
   const [squadName, setSquadName] = useState<string>("");
@@ -56,13 +56,11 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
   
   const handleTabChange = (key: string | null) => {
     if (key) {
-        // 2. INCREMENT KEY: Increment the key when navigating to the "today" tab
-        if (key === "today") {
+        if (key === "entry") {
             setGoalEntryKey(prev => prev + 1);
         }
         
-        // NEW LOGIC: Increment key when navigating to the "submission" tab
-        if (key === "submission") {
+        if (key === "history") {
             setHistoryKey(prev => prev + 1);
         }
         
@@ -73,13 +71,10 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
 
   const renderTabContent = (key: SquadTabKey) => {
     switch (key) {
-      case "today":
-        // 3. PASS KEY: Use the key prop to force remount
+      case "entry":
         return <SquadGoalEntryPage key={goalEntryKey} squadId={squadId} />;
-      case "submission":
-        // 3b. PASS NEW KEY: Use the historyKey prop to force remount/refresh
-        // Pass an empty string for goalGroupId to hit the optional endpoint
-        return <SquadGoalSubmissionPage key={historyKey} squadId={squadId} goalGroupId={""} />;
+      case "history":
+        return <SquadGoalsHistoryPage key={historyKey} squadId={squadId} />;
       case "members":
         return <SquadMembersPage squadId={squadId} />;
       case "progress":
@@ -94,7 +89,7 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
   return (
     <AppLayout title={squadName}>
       <Box px={{ base: 'md', md: 0 }}>
-        <Stack spacing="md">
+        <Stack gap="md">
           <Tabs 
             value={activeTab} 
             onChange={handleTabChange} 
@@ -107,17 +102,17 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
               {/* Note: The global CSS rules for .tabs button and .tabs button.active
                    should now correctly style these Mantine Tabs.Tab components. */}
               <Tabs.Tab 
-                value="today" 
+                value="entry" 
                 // Add your active class conditionally for the CSS to pick up the underline
-                className={activeTab === 'today' ? 'active' : ''}
+                className={activeTab === 'entry' ? 'active' : ''}
               >
-                Today
+                Log Entry
               </Tabs.Tab>
               <Tabs.Tab 
-                value="submission"
-                className={activeTab === 'submission' ? 'active' : ''}
+                value="history"
+                className={activeTab === 'history' ? 'active' : ''}
               >
-                Recent History
+                History
               </Tabs.Tab>
               <Tabs.Tab 
                 value="progress"
@@ -148,8 +143,8 @@ const SquadLayout: React.FC<SquadLayoutProps> = ({ squadId }) => {
               // Set background to use a solid CSS variable or let the global CSS handle it
               // We remove the explicit Mantine bg="white" to let global styles take over
             >
-              <Tabs.Panel value="today">{renderTabContent("today")}</Tabs.Panel>
-              <Tabs.Panel value="submission">{renderTabContent("submission")}</Tabs.Panel>
+              <Tabs.Panel value="entry">{renderTabContent("entry")}</Tabs.Panel>
+              <Tabs.Panel value="history">{renderTabContent("history")}</Tabs.Panel>
               <Tabs.Panel value="progress">{renderTabContent("progress")}</Tabs.Panel>
               <Tabs.Panel value="members">{renderTabContent("members")}</Tabs.Panel>
               <Tabs.Panel value="goals">{renderTabContent("goals")}</Tabs.Panel>

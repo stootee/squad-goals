@@ -16,7 +16,8 @@ from utils import (
     validate_boundary_value,
     validate_partition_data,
     validate_counter_partition,
-    validate_time_partition
+    validate_time_partition,
+    is_boundary_valid_for_partition
 )
 
 
@@ -230,6 +231,124 @@ class TestValidatePartitionData:
         data, error = validate_time_partition(data_input)
         assert data is None
         assert error == "Missing required group fields (start_date, end_date)"
+
+
+class TestIsBoundaryValidForPartition:
+    """Tests for is_boundary_valid_for_partition function."""
+
+    def test_daily_partition_all_valid(self):
+        """Test that all dates are valid for Daily partition."""
+        start = "2024-10-01"
+        assert is_boundary_valid_for_partition("2024-10-01", "Daily", start) is True
+        assert is_boundary_valid_for_partition("2024-10-02", "Daily", start) is True
+        assert is_boundary_valid_for_partition("2024-10-03", "Daily", start) is True
+        assert is_boundary_valid_for_partition("2024-10-15", "Daily", start) is True
+
+    def test_weekly_partition_valid_boundaries(self):
+        """Test Weekly partition only accepts 7-day intervals."""
+        start = "2024-10-01"
+        # Valid: start date and multiples of 7 days
+        assert is_boundary_valid_for_partition("2024-10-01", "Weekly", start) is True  # Day 0
+        assert is_boundary_valid_for_partition("2024-10-08", "Weekly", start) is True  # Day 7
+        assert is_boundary_valid_for_partition("2024-10-15", "Weekly", start) is True  # Day 14
+        assert is_boundary_valid_for_partition("2024-10-22", "Weekly", start) is True  # Day 21
+        assert is_boundary_valid_for_partition("2024-10-29", "Weekly", start) is True  # Day 28
+
+    def test_weekly_partition_invalid_boundaries(self):
+        """Test Weekly partition rejects non-7-day intervals."""
+        start = "2024-10-01"
+        # Invalid: not multiples of 7 days
+        assert is_boundary_valid_for_partition("2024-10-02", "Weekly", start) is False  # Day 1
+        assert is_boundary_valid_for_partition("2024-10-03", "Weekly", start) is False  # Day 2
+        assert is_boundary_valid_for_partition("2024-10-07", "Weekly", start) is False  # Day 6
+        assert is_boundary_valid_for_partition("2024-10-09", "Weekly", start) is False  # Day 8
+        assert is_boundary_valid_for_partition("2024-10-14", "Weekly", start) is False  # Day 13
+
+    def test_biweekly_partition_valid_boundaries(self):
+        """Test BiWeekly partition only accepts 14-day intervals."""
+        start = "2024-10-01"
+        # Valid: start date and multiples of 14 days
+        assert is_boundary_valid_for_partition("2024-10-01", "BiWeekly", start) is True   # Day 0
+        assert is_boundary_valid_for_partition("2024-10-15", "BiWeekly", start) is True   # Day 14
+        assert is_boundary_valid_for_partition("2024-10-29", "BiWeekly", start) is True   # Day 28
+        assert is_boundary_valid_for_partition("2024-11-12", "BiWeekly", start) is True   # Day 42
+
+    def test_biweekly_partition_invalid_boundaries(self):
+        """Test BiWeekly partition rejects non-14-day intervals."""
+        start = "2024-10-01"
+        # Invalid: not multiples of 14 days
+        assert is_boundary_valid_for_partition("2024-10-08", "BiWeekly", start) is False  # Day 7
+        assert is_boundary_valid_for_partition("2024-10-22", "BiWeekly", start) is False  # Day 21
+        assert is_boundary_valid_for_partition("2024-10-09", "BiWeekly", start) is False  # Day 8
+
+    def test_monthly_partition_valid_boundaries(self):
+        """Test Monthly partition only accepts same day-of-month."""
+        start = "2024-10-01"
+        # Valid: same day of month (1st)
+        assert is_boundary_valid_for_partition("2024-10-01", "Monthly", start) is True
+        assert is_boundary_valid_for_partition("2024-11-01", "Monthly", start) is True
+        assert is_boundary_valid_for_partition("2024-12-01", "Monthly", start) is True
+        assert is_boundary_valid_for_partition("2025-01-01", "Monthly", start) is True
+
+    def test_monthly_partition_invalid_boundaries(self):
+        """Test Monthly partition rejects different day-of-month."""
+        start = "2024-10-01"
+        # Invalid: different day of month
+        assert is_boundary_valid_for_partition("2024-10-02", "Monthly", start) is False
+        assert is_boundary_valid_for_partition("2024-10-15", "Monthly", start) is False
+        assert is_boundary_valid_for_partition("2024-11-15", "Monthly", start) is False
+
+    def test_monthly_partition_mid_month_start(self):
+        """Test Monthly partition with mid-month start date."""
+        start = "2024-10-15"
+        # Valid: 15th of each month
+        assert is_boundary_valid_for_partition("2024-10-15", "Monthly", start) is True
+        assert is_boundary_valid_for_partition("2024-11-15", "Monthly", start) is True
+        assert is_boundary_valid_for_partition("2024-12-15", "Monthly", start) is True
+        # Invalid: different days
+        assert is_boundary_valid_for_partition("2024-10-01", "Monthly", start) is False
+        assert is_boundary_valid_for_partition("2024-11-01", "Monthly", start) is False
+
+    def test_custom_counter_all_valid(self):
+        """Test that all boundaries are valid for CustomCounter partition."""
+        # CustomCounter accepts any boundary
+        assert is_boundary_valid_for_partition("1", "CustomCounter", 1) is True
+        assert is_boundary_valid_for_partition("5", "CustomCounter", 1) is True
+        assert is_boundary_valid_for_partition("100", "CustomCounter", 1) is True
+
+    def test_with_datetime_object(self):
+        """Test validation with datetime object as start_value."""
+        start_dt = datetime(2024, 10, 1)
+        assert is_boundary_valid_for_partition("2024-10-01", "Weekly", start_dt) is True
+        assert is_boundary_valid_for_partition("2024-10-08", "Weekly", start_dt) is True
+        assert is_boundary_valid_for_partition("2024-10-02", "Weekly", start_dt) is False
+
+    def test_unknown_partition_type(self):
+        """Test that unknown partition types accept all boundaries."""
+        start = "2024-10-01"
+        # Should gracefully accept all boundaries for unknown types
+        assert is_boundary_valid_for_partition("2024-10-01", "UnknownType", start) is True
+        assert is_boundary_valid_for_partition("2024-10-15", "UnknownType", start) is True
+
+    def test_invalid_boundary_format(self):
+        """Test graceful handling of invalid boundary format."""
+        start = "2024-10-01"
+        # Should accept invalid format gracefully (returns True on parse error)
+        assert is_boundary_valid_for_partition("not-a-date", "Weekly", start) is True
+
+    def test_weekly_partition_with_different_start_dates(self):
+        """Test Weekly partition alignment with various start dates."""
+        # Start on Tuesday (Oct 1, 2024)
+        start1 = "2024-10-01"
+        assert is_boundary_valid_for_partition("2024-10-01", "Weekly", start1) is True
+        assert is_boundary_valid_for_partition("2024-10-08", "Weekly", start1) is True
+
+        # Start on Sunday (Oct 6, 2024)
+        start2 = "2024-10-06"
+        assert is_boundary_valid_for_partition("2024-10-06", "Weekly", start2) is True
+        assert is_boundary_valid_for_partition("2024-10-13", "Weekly", start2) is True
+        # Oct 8 is not valid for this start date (2 days after start)
+        assert is_boundary_valid_for_partition("2024-10-08", "Weekly", start2) is False
 
 
 # Note: Database query helper tests require database fixtures

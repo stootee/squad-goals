@@ -84,25 +84,45 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
 
     return (
       // Use Flex to force targets side-by-side, but allow it to take up available space
-      <Flex gap="xs" style={{ flexGrow: 1, minWidth: 140 }}>
+      <Flex gap="xs" style={{ flexGrow: 1, minWidth: 0 }}>
         <TextInput
           value={targetValue ?? ""}
           placeholder={config.targetPlaceholder}
           size="xs"
-          style={{ flex: 1, minWidth: 60, maxWidth: 100 }} // Max width added for desktop control
+          style={{ flex: 1, minWidth: 50, maxWidth: 100 }} // Reduced minWidth for mobile
           onChange={targetHandler}
           onWheel={handleWheel}
           disabled={!isAdmin}
+          readOnly={!isAdmin}
+          styles={{
+            input: {
+              cursor: isAdmin ? 'text' : 'default',
+              backgroundColor: isAdmin ? undefined : 'var(--mantine-color-gray-0)',
+              color: 'var(--mantine-color-dark-9)',
+              opacity: 1,
+              border: isAdmin ? undefined : '1px solid var(--mantine-color-gray-3)'
+            }
+          }}
         />
         {config.targetMaxLabel && (
           <TextInput
             value={targetMaxValue ?? ""}
             placeholder={config.targetMaxPlaceholder}
             size="xs"
-            style={{ flex: 1, minWidth: 60, maxWidth: 100 }} // Max width added for desktop control
+            style={{ flex: 1, minWidth: 50, maxWidth: 100 }} // Reduced minWidth for mobile
             onChange={targetMaxHandler}
             onWheel={handleWheel}
             disabled={!isAdmin}
+            readOnly={!isAdmin}
+            styles={{
+              input: {
+                cursor: isAdmin ? 'text' : 'default',
+                backgroundColor: isAdmin ? undefined : 'var(--mantine-color-gray-0)',
+                color: 'var(--mantine-color-dark-9)',
+                opacity: 1,
+                border: isAdmin ? undefined : '1px solid var(--mantine-color-gray-3)'
+              }
+            }}
           />
         )}
       </Flex>
@@ -122,8 +142,18 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
         value={value}
         onChange={handler}
         disabled={!isAdmin}
+        readOnly={!isAdmin}
         size="xs"
-        style={{ flex: 1, minWidth: 100, maxWidth: 150 }} // Max width added for desktop control
+        style={{ flex: 1, minWidth: 90, maxWidth: 150 }} // Reduced minWidth for mobile
+        styles={{
+          input: {
+            cursor: isAdmin ? 'pointer' : 'default',
+            backgroundColor: isAdmin ? undefined : 'var(--mantine-color-gray-0)',
+            color: 'var(--mantine-color-dark-9)',
+            opacity: 1,
+            border: isAdmin ? undefined : '1px solid var(--mantine-color-gray-3)'
+          }
+        }}
       />
     );
   };
@@ -141,7 +171,7 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
 
     if (type === "CustomCounter") {
       return (
-        <Group spacing="xs" align="flex-end" wrap="wrap" grow style={{ flex: 1 }}>
+        <Group gap="xs" align="flex-end" wrap="wrap" grow style={{ flex: 1, minWidth: 0 }}>
           <TextInput
             label="Name"
             value={activeGroup.partition_label ?? ""}
@@ -149,7 +179,7 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
             size="xs"
             onChange={(e) => handleGroupConfigChange("partition_label", e.target.value)}
             disabled={!isAdmin}
-            style={{ flex: 1, minWidth: 100, maxWidth: 150 }}
+            style={{ flex: 1, minWidth: 80, maxWidth: 150 }}
           />
           <TextInput
             label="Start"
@@ -159,7 +189,7 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
             onChange={(e) => handleGroupConfigChange("start_date", e.target.value)}
             onWheel={handleWheel}
             disabled={!isAdmin}
-            style={{ flex: 1, minWidth: 60, maxWidth: 100 }}
+            style={{ flex: 1, minWidth: 50, maxWidth: 100 }}
           />
           <TextInput
             label="End (Optional)"
@@ -169,7 +199,7 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
             onChange={(e) => handleGroupConfigChange("end_date", e.target.value)}
             onWheel={handleWheel}
             disabled={!isAdmin}
-            style={{ flex: 1, minWidth: 60, maxWidth: 100 }}
+            style={{ flex: 1, minWidth: 50, maxWidth: 100 }}
           />
         </Group>
       );
@@ -179,7 +209,7 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
     const inputType = isDateTime ? "datetime-local" : "date";
 
     return (
-      <Group spacing="xs" align="flex-end" wrap="wrap" grow style={{ flex: 1 }}>
+      <Group gap="xs" align="flex-end" wrap="wrap" grow style={{ flex: 1, minWidth: 0 }}>
         <TextInput
           label="Start"
           type={inputType}
@@ -187,7 +217,7 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
           size="xs"
           onChange={(e) => handleGroupConfigChange("start_date", e.target.value)}
           disabled={!isAdmin}
-          style={{ flex: 1, minWidth: 120, maxWidth: 200 }}
+          style={{ flex: 1, minWidth: 100, maxWidth: 200 }}
         />
         <TextInput
           label="End"
@@ -196,7 +226,7 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
           size="xs"
           onChange={(e) => handleGroupConfigChange("end_date", e.target.value)}
           disabled={!isAdmin}
-          style={{ flex: 1, minWidth: 120, maxWidth: 200 }}
+          style={{ flex: 1, minWidth: 100, maxWidth: 200 }}
         />
       </Group>
     );
@@ -204,7 +234,7 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
 
   if (isGroupLoading) {
     return (
-      <Stack spacing="xs">
+      <Stack gap="xs">
         <Title order={3}>Loading Goals...</Title>
       </Stack>
     );
@@ -219,14 +249,14 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
   // ***********************************************************************************
 
   return (
-    // Set a max-width for the entire component (e.g., 900px) to prevent excessive spreading
-    <Stack spacing="sm" style={{ margin: '0 auto' }} maw={900}>
+    // Set a max-width for the entire component to prevent excessive spreading on desktop
+    <Stack gap="sm" style={{ margin: '0 auto' }} maw={800}>
       <Title order={3}>{isAdmin ? "Manage Squad Goals (Admin)" : "Configured Squad Goals"}</Title>
 
       {isAdmin && activeGroup && (
         <CollapsibleCardLocal id="group-config" title="Goal Tracking Period Configuration" squadId={squadId}>
-          <Stack spacing="xs">
-            <Group spacing="xs" align="flex-end" wrap="wrap" grow>
+          <Stack gap="xs">
+            <Group gap="xs" align="flex-end" wrap="wrap" grow>
               <Select
                 label="Grouped"
                 data={["Daily", "Weekly", "BiWeekly", "Monthly", "CustomCounter"].map((t) => ({
@@ -237,9 +267,9 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
                 onChange={(val) => handleGroupConfigChange("partition_type", val!)}
                 disabled={!isAdmin}
                 size="xs"
-                style={{ flex: 1, minWidth: 120, maxWidth: 180 }}
+                style={{ flex: 1, minWidth: 100, maxWidth: 180 }}
               />
-              {renderPartitionInputs(activeGroup)} 
+              {renderPartitionInputs(activeGroup)}
             </Group>
           </Stack>
 
@@ -253,13 +283,13 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
         </CollapsibleCardLocal>
       )}
 
-      <Stack spacing="xs">
+      <Stack gap="xs">
         {goals
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((goal, index) => (
             <Paper key={goal.id || `temp-${index}`} shadow="xs" p="sm" withBorder>
               {/* This is the key change: Flex with responsive direction */}
-              <Flex 
+              <Flex
                 gap="xs"
                 wrap="wrap"
                 align="center"
@@ -273,23 +303,33 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
                   size="xs"
                   onChange={(e) => handleChange(index, "name", e.target.value)}
                   disabled={!isAdmin}
-                  style={{ flex: 1, minWidth: 150 }} // Allow it to flex
+                  readOnly={!isAdmin}
+                  styles={{
+                    input: {
+                      cursor: isAdmin ? 'text' : 'default',
+                      backgroundColor: isAdmin ? undefined : 'var(--mantine-color-gray-0)',
+                      color: 'var(--mantine-color-dark-9)',
+                      opacity: 1,
+                      border: isAdmin ? undefined : '1px solid var(--mantine-color-gray-3)'
+                    }
+                  }}
+                  style={{ flex: 1, minWidth: 0 }} // Allow it to flex, minWidth 0 for proper shrinking
                   w={{ base: '100%', md: 250 }} // Full width on mobile, fixed width on desktop
                 />
 
                 {/* 2. Type and Targets (will wrap if needed on small screens) */}
-                <Group 
-                  spacing="xs" 
-                  wrap="wrap" 
-                  grow 
-                  align="center" 
-                  style={{ flex: 1, minWidth: 350 }} // Allows this section to flex
+                <Group
+                  gap="xs"
+                  wrap="wrap"
+                  grow
+                  align="center"
+                  style={{ flex: 1, minWidth: 0 }} // minWidth 0 allows shrinking
                   w={{ base: '100%', md: 'auto' }} // Full width on mobile, auto-size on desktop
                 >
                   {renderTypeDropdown(goal, index)}
                   {renderTargetInputs(goal, index)}
                 </Group>
-                
+
                 {/* 3. Remove Button (must be at the end of the flex container) */}
                 {isAdmin && (
                   <Button color="red" size="xs" onClick={() => removeGoal(goal, index)} style={{ flexShrink: 0 }} w={{ base: '100%', md: 'auto' }}>
@@ -322,12 +362,12 @@ const SquadGoalsManager: React.FC<{ squadId: string; isAdmin: boolean }> = ({ sq
             />
 
             {/* 2. Type and Targets */}
-            <Group 
-              spacing="xs" 
-              wrap="wrap" 
-              grow 
-              align="center" 
-              style={{ flex: 1, minWidth: 350 }}
+            <Group
+              gap="xs"
+              wrap="wrap"
+              grow
+              align="center"
+              style={{ flex: 1, minWidth: 0 }}
               w={{ base: '100%', md: 'auto' }}
             >
               {renderTypeDropdown(newGoal)}

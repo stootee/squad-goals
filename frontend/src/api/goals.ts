@@ -104,15 +104,52 @@ export const goalsApi = {
     goalGroupId?: string;
     startDate?: string;
     endDate?: string;
+    page?: number;
+    pageSize?: number;
   }): Promise<any> => {
     const queryParams = new URLSearchParams();
     if (params?.goalGroupId) queryParams.append('goal_group_id', params.goalGroupId);
     if (params?.startDate) queryParams.append('start_date', params.startDate);
     if (params?.endDate) queryParams.append('end_date', params.endDate);
+    if (params?.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params?.pageSize) queryParams.append('page_size', params.pageSize.toString());
 
     const query = queryParams.toString();
     const path = `/squads/${squadId}/goals/history${query ? `?${query}` : ''}`;
 
     return apiClient.get(path);
+  },
+
+  /**
+   * Get all squad members' entries for a specific day or date range
+   */
+  getEntriesByDay: async (squadId: string, params?: {
+    date?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.date) queryParams.append('date', params.date);
+    if (params?.startDate) queryParams.append('start_date', params.startDate);
+    if (params?.endDate) queryParams.append('end_date', params.endDate);
+
+    const query = queryParams.toString();
+    const path = `/squads/${squadId}/goals/entries/day${query ? `?${query}` : ''}`;
+
+    return apiClient.get(path);
+  },
+
+  /**
+   * Get entry for a specific date/boundary
+   */
+  getEntry: async (squadId: string, date: string): Promise<any> => {
+    return apiClient.get(`/squads/${squadId}/goals/entry?date=${date}`);
+  },
+
+  /**
+   * Submit goal entry for a specific date/boundary
+   */
+  submitEntry: async (squadId: string, payload: { date: string | number; entries: any }): Promise<ApiResponse> => {
+    return apiClient.post<ApiResponse>(`/squads/${squadId}/goals/entry`, payload);
   },
 };

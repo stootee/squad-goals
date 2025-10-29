@@ -11,15 +11,18 @@ This module provides common test fixtures including:
 import pytest
 import sys
 import os
+import tempfile
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import app as flask_app
+from flask import Flask
 from models import db as _db, User, Squad, SquadMember
+from flask_login import LoginManager
+from flask_cors import CORS
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='function')
 def app():
     """
     Create and configure a Flask app instance for testing.
@@ -27,21 +30,47 @@ def app():
     Returns:
         Flask app configured for testing
     """
-    flask_app.config.update({
+    # Create a fresh Flask app for each test
+    test_app = Flask(__name__)
+
+    # Configure for testing
+    test_app.config.update({
         'TESTING': True,
         'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
         'WTF_CSRF_ENABLED': False,
-        'SECRET_KEY': 'test-secret-key'
+        'SECRET_KEY': 'test-secret-key',
+        'SESSION_COOKIE_HTTPONLY': True,
+        'SESSION_COOKIE_SECURE': False,
+        'SESSION_COOKIE_SAMESITE': "Lax"
     })
 
+    # Initialize extensions
+    _db.init_app(test_app)
+    login_manager = LoginManager()
+    login_manager.init_app(test_app)
+    CORS(test_app, supports_credentials=True)
+
+    # User loader
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(user_id)
+
+    @login_manager.unauthorized_handler
+    def unauthorized():
+        from flask import jsonify
+        return jsonify({"error": "Unauthorized"}), 401
+
+    # Register blueprints
+    from routes import register_blueprints
+    register_blueprints(test_app)
+
     # Create database tables
-    with flask_app.app_context():
+    with test_app.app_context():
         _db.create_all()
-
-    yield flask_app
-
-    # Cleanup
-    with flask_app.app_context():
+        yield test_app
+        # Cleanup after each test
+        _db.session.remove()
         _db.drop_all()
 
 
@@ -56,11 +85,8 @@ def db(app):
     Yields:
         Database session
     """
-    with app.app_context():
-        _db.create_all()
-        yield _db
-        _db.session.remove()
-        _db.drop_all()
+    # App context is already active from app fixture
+    yield _db
 
 
 @pytest.fixture(scope='function')
